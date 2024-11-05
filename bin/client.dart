@@ -6,10 +6,17 @@ import 'package:pocketbase_crdt/src/connection/connect.dart';
 
 void main(List<String> args) async {
   final userId = 'qqp8kzg8hq5qwnq';
+  final pb = PocketBase('http://127.0.0.1:8090');
+  // final pbUrl = pb.baseUrl.replaceAll('https://', '').replaceAll('http://', '');
   final instance = PocketbaseCrdtClient(
-    createDatabaseExecutor(args.first),
-    client: PocketBase('http://127.0.0.1:8090'),
-    createUri: (userId) => Uri.parse('ws://localhost:6000/ws/$userId'),
+    createDatabaseExecutor(args.firstOrNull ?? 'local.db'),
+    client: pb,
+    createUri: (userId) {
+      // final url = 'ws://${pbUrl}/ws/$userId';
+      final url = 'ws://localhost:6000/ws/$userId';
+      print('Connecting to: $url');
+      return Uri.parse(url);
+    },
     userId: userId,
   );
   await instance.init();

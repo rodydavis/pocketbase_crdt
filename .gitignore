@@ -57,3 +57,11 @@ db/
 pocketbase
 pb_data/
 pb_migrations/
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
+changeset.json
+tables.json

@@ -108,35 +108,42 @@ class PocketbaseCrdtServer extends CrdtDatabase {
       print('server: sendRecord: ${record.id} $data');
       final synced = await getPocketbaseRecordsSync(record.id, colId) //
           .getSingleOrNull();
-      if (synced == null) {
+      bool isNew = synced == null;
+      bool last = false;
+      while (true) {
         try {
-          await col.create(
-            body: data,
+          if (isNew) {
+            await col.create(
+              body: data,
+            );
+          } else {
+            final map = {...data};
+            map.remove('id');
+            await col.update(
+              model.id,
+              body: map,
+            );
+          }
+          await setRecordSynced(
+            record.id,
+            colId,
+            colName,
+            DateTime.now(),
           );
+          break;
         } catch (e) {
+          if (last) rethrow;
           if (e is ClientException) {
             if (e.statusCode == 400) {
-              data.remove('id');
-              await col.update(
-                model.id,
-                body: data,
-              );
+              isNew = false;
             }
+            if (e.statusCode == 404) {
+              isNew = true;
+            }
+            last = true;
           }
         }
-      } else {
-        data.remove('id');
-        await col.update(
-          model.id,
-          body: data,
-        );
       }
-      await setRecordSynced(
-        record.id,
-        colId,
-        colName,
-        DateTime.now(),
-      );
     } catch (e, t) {
       print('server: syncRecord error: $e $t');
     }
@@ -305,8 +312,15 @@ class PocketbaseCrdtServer extends CrdtDatabase {
   Handler _validateVersion(Handler innerHandler) {
     return (request) {
       final userAgent = request.headers[HttpHeaders.userAgentHeader]!;
-      final version = Version.parse(userAgent.substring(
-          userAgent.indexOf('/') + 1, userAgent.indexOf(' ')));
+      if (userAgent.isEmpty) {
+        return Response(HttpStatus.upgradeRequired);
+      }
+      final aIdx = userAgent.indexOf('/');
+      final bIdx = userAgent.indexOf(' ');
+      if (aIdx == -1 || bIdx == -1) {
+        return Response(HttpStatus.upgradeRequired);
+      }
+      final version = Version.parse(userAgent.substring(aIdx + 1, bIdx));
       return version >= minimumVersion
           ? innerHandler(request)
           : Response(HttpStatus.upgradeRequired);
