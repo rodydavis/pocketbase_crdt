@@ -1,10 +1,15 @@
 package main
 
 import (
+	"encoding/json"
+	"fmt"
 	"log"
+	"net/http/httputil"
+	"net/url"
 	"os/exec"
 	"strings"
 
+	"github.com/labstack/echo/v5"
 	"github.com/pocketbase/pocketbase"
 	"github.com/pocketbase/pocketbase/core"
 )
@@ -14,30 +19,30 @@ func main() {
 
 	app.OnBeforeServe().Add(func(e *core.ServeEvent) error {
 		// Get crdt collections
-		// tables := map[string]any{}
-		// tables["users"] = "json_extract(data, '$.user') = '{{user_id}}'"
-		// tablesJson, err := json.Marshal(tables)
-		// serverPort := "6000"
-		// if err != nil {
-		// 	return err
-		// }
-		// go func() {
-		// 	app.Logger().Info("Starting ws server: " + string(tablesJson))
-		// 	out, err := runCMD(*app, "dart", []string{"run", "bin/server.dart", "--tables=" + string(tablesJson), "--port=" + serverPort})
-		// 	app.Logger().Info("Server ws started: " + "port " + serverPort)
-		// 	if err != nil {
-		// 		app.Logger().Error("RunCMD ERROR: "+" cmd"+" dart"+" error ", err)
-		// 	}
-		// 	if out != "" {
-		// 		app.Logger().Info("RunCMD: "+" cmd"+" dart"+" output ", out)
-		// 	}
-		// }()
-		// proxy := httputil.NewSingleHostReverseProxy(&url.URL{
-		// 	Scheme: "http",
-		// 	Host:   "localhost:" + serverPort,
-		// })
-		// e.Router.Any("/*", echo.WrapHandler(proxy))
-		// e.Router.Any("/", echo.WrapHandler(proxy))
+		tables := map[string]any{}
+		tables["todos"] = "json_extract(data, '$.user') = '{{user_id}}'"
+		tablesJson, err := json.Marshal(tables)
+		serverPort := "6000"
+		if err != nil {
+			return err
+		}
+		go func() {
+			app.Logger().Info("Starting ws server: " + string(tablesJson))
+			out, err := runCMD(*app, "dart", []string{"run", "bin/server.dart", "--tables=" + string(tablesJson), "--port=" + serverPort})
+			app.Logger().Info("Server ws started: " + "port " + serverPort)
+			if err != nil {
+				app.Logger().Error("RunCMD ERROR: " + fmt.Sprint(err))
+			}
+			if out != "" {
+				app.Logger().Info("RunCMD OUTPUT: " + out)
+			}
+		}()
+		proxy := httputil.NewSingleHostReverseProxy(&url.URL{
+			Scheme: "http",
+			Host:   "localhost:6000",
+		})
+		e.Router.Any("/*", echo.WrapHandler(proxy))
+		e.Router.Any("/", echo.WrapHandler(proxy))
 		return nil
 	})
 

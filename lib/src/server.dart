@@ -165,6 +165,7 @@ class PocketbaseCrdtServer extends CrdtDatabase {
 
     final router = Router() //
       ..head('/check_version', _checkVersion)
+      // ..post('/sync/<userId>', _syncHandler)
       ..get('/changeset/<userId>/<peerId>', _getChangeset)
       ..delete('/user/<userId>', _deleteData)
       ..get('/ws/<userId>', _wsHandler);
@@ -185,6 +186,19 @@ class PocketbaseCrdtServer extends CrdtDatabase {
       await setItem(fullSyncKey, 'true');
     }
   }
+
+  // Future<Response> _syncHandler(Request request, String userId) async {
+  //   // Sync remote changeset for user
+  //   // final changes = this.getChangeset(
+  //   //   exceptNodeId: exceptNodeId,
+  //   //   modifiedAfter: modifiedAfter,
+  //   //   modifiedOn: modifiedOn,
+  //   //   onlyNodeId: onlyNodeId,
+  //   //   onlyTables: onlyTables,
+  //   //   filters: createFilters(userId),
+  //   // );
+    
+  // }
 
   Future<Response> _wsHandler(Request request, String userId) async {
     try {
