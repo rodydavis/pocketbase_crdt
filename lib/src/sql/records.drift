@@ -1,0 +1,113 @@
+CREATE TABLE pocketbase_records (
+  id TEXT GENERATED ALWAYS AS (json_extract(data, '$.id')) VIRTUAL NOT NULL UNIQUE,
+  data TEXT NOT NULL DEFAULT '{}',
+  collectionId TEXT GENERATED ALWAYS AS (json_extract(data, '$.collectionId')) VIRTUAL NOT NULL UNIQUE,
+  collectionName TEXT GENERATED ALWAYS AS (json_extract(data, '$.collectionName')) VIRTUAL NOT NULL UNIQUE,
+  created TIMESTAMP GENERATED ALWAYS AS (json_extract(data, '$.created')) VIRTUAL NOT NULL UNIQUE,
+  updated TIMESTAMP GENERATED ALWAYS AS (json_extract(data, '$.updated')) VIRTUAL NOT NULL UNIQUE,
+  updated_at TIMESTAMP,
+  deleted_at TIMESTAMP,
+  synced_at TIMESTAMP,
+  UNIQUE(id, collectionId, collectionName)
+);
+
+CREATE TABLE patches (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  patch TEXT NOT NULL,
+  record_id TEXT NOT NULL,
+  collectionId TEXT NOT NULL,
+  collectionName TEXT NOT NULL,
+  is_deleted BOOLEAN NOT NULL DEFAULT 0,
+  is_new BOOLEAN NOT NULL DEFAULT 1,
+  timestamp TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TRIGGER patches_insert_create AFTER INSERT ON patches
+WHEN new.is_deleted = 0 AND new.is_new = 1 BEGIN
+  INSERT INTO pocketbase_records(data, updated_at)
+  VALUES (new.patch, new.timestamp);
+END;
+
+CREATE TRIGGER patches_insert_delete AFTER INSERT ON patches
+WHEN new.is_deleted = 1 AND new.is_new = 0 BEGIN
+  UPDATE pocketbase_records SET
+    deleted_at = new.timestamp,
+    updated_at = new.timestamp
+  WHERE id = new.record_id;
+END;
+
+CREATE TRIGGER patches_insert_update AFTER INSERT ON patches
+WHEN new.is_deleted = 0 AND new.is_new = 0 BEGIN
+    UPDATE pocketbase_records SET
+      data = json_patch(data, new.patch),
+      updated_at = new.timestamp
+    WHERE id = new.record_id;
+END;
+
+insertPatch:
+INSERT INTO patches (patch, record_id, is_deleted, is_new)
+VALUES (:patch, :record_id, :is_deleted, :is_new);
+
+deleteRecord:
+INSERT INTO patches (record_id, is_deleted, is_new)
+VALUES (:record_id, 1, 0);
+
+updateRecord:
+INSERT INTO patches (patch, record_id)
+VALUES (:patch, :record_id);
+
+-- insertRecord:
+-- INSERT OR REPLACE 
+-- INTO pocketbase_records (id, data, collectionId, collectionName, created, updated, synced, fresh, deleted)
+-- VALUES (:id, :data, :collectionId, :collectionName, :created, :updated, 0, 1, 0)
+-- RETURNING *;
+
+
+-- setRecordSynced:
+-- UPDATE pocketbase_records
+-- SET synced = 1
+-- WHERE id = :id;
+
+-- updateRecord:
+-- UPDATE pocketbase_records
+-- SET data = :data, updated = :updated, synced = 0
+-- WHERE id = :id;
+
+-- getRecords:
+-- SELECT * FROM pocketbase_records 
+-- WHERE (collectionId = :collection OR collectionName = :collection)
+-- AND deleted = 0
+-- ORDER BY created DESC;
+
+-- getRecord:
+-- SELECT * FROM pocketbase_records 
+-- WHERE id = :id
+-- AND deleted = 0;
+
+-- getUnsyncedRecords:
+-- SELECT * FROM pocketbase_records 
+-- WHERE collectionId = :collection OR collectionName = :collection
+-- AND synced = 0
+-- ORDER BY created DESC;
+
+-- getDeletedRecords:
+-- SELECT * FROM pocketbase_records 
+-- WHERE collectionId = :collection OR collectionName = :collection
+-- AND deleted = 1
+-- ORDER BY created DESC;
+
+-- deleteRecord:
+-- DELETE FROM pocketbase_records 
+-- WHERE id = :id;
+
+-- softDeleteRecord:
+-- UPDATE pocketbase_records
+-- SET deleted = 1, updated = :updated, synced = 0
+-- WHERE id = :id;
+
+-- searchRecords:
+-- SELECT *
+-- FROM pocketbase_records 
+-- WHERE collectionId = :collection OR collectionName = :collection
+-- AND (data LIKE :query OR id LIKE :query)
+-- ORDER BY created DESC;
