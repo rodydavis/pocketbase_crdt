@@ -21,7 +21,7 @@ class CrdtDatabase extends _$CrdtDatabase with Crdt {
   ///
   /// Use [nodeId] to set an explicit id, or leave it empty to autogenerate a
   /// random one.
-  /// If you set a custom id, make sure it's unique accross your system, as
+  /// If you set a custom id, make sure it's unique across your system, as
   /// collisions will break the CRDT in subtle ways.
   ///
   /// Setting the node id on init only works for empty CRDTs.
@@ -29,7 +29,15 @@ class CrdtDatabase extends _$CrdtDatabase with Crdt {
   Future<void> init([String? nodeId]) async {
     nodeId ??= generateNodeId();
     // Read the canonical time from database, or start from scratch
-    final lastModified = await _getLastModified().getSingleOrNull();
+    // final lastModified = await _getLastModified() //
+    //     .map((e) => e.modified)
+    //     .getSingleOrNull();
+    var records = await getAllRecords().get();
+    // Sort by modified
+    records.sort((a, b) => a.modified.compareTo(b.modified));
+    final last = records.lastOrNull;
+    final lastModified = last?.modified;
+
     canonicalTime = lastModified ?? Hlc.zero(nodeId);
   }
 
@@ -40,18 +48,54 @@ class CrdtDatabase extends _$CrdtDatabase with Crdt {
     String? onlyNodeId,
     String? exceptNodeId,
   }) async {
-    assert(onlyNodeId == null || exceptNodeId == null);
-    Selectable<Hlc?> target;
-    if (onlyNodeId == null && exceptNodeId != null) {
-      target = _getLastModifiedOnlyNodeId(exceptNodeId);
-    } else if (exceptNodeId == null && onlyNodeId != null) {
-      target = _getLastModifiedExceptNodeId(onlyNodeId);
-    } else {
-      target = _getLastModified();
+    var records = await getAllRecords().get();
+    if (records.isNotEmpty) {
+      if (onlyNodeId != null) {
+        records = records.where((e) => e.hlc.nodeId == onlyNodeId).toList();
+      }
+      if (exceptNodeId != null) {
+        records = records.where((e) => e.hlc.nodeId != exceptNodeId).toList();
+      }
+      // Sort by modified
+      records.sort((a, b) => a.modified.compareTo(b.modified));
     }
-    final hlc = await target.getSingleOrNull();
-    return hlc ?? Hlc.zero(nodeId);
+    final last = records.lastOrNull;
+    return last?.hlc ?? Hlc.zero(nodeId);
   }
+
+  // Future<RecordModel?> getLastModifiedRecordModel({
+  //   String? onlyNodeId,
+  //   String? exceptNodeId,
+  // }) async {
+  //   final record = await getLastModifiedRecord(
+  //     onlyNodeId: onlyNodeId,
+  //     exceptNodeId: exceptNodeId,
+  //   );
+  //   if (record == null) return null;
+  //   return _recordFromJson(record);
+  // }
+
+  // Future<PocketbaseRecord?> getLastModifiedRecord({
+  //   String? onlyNodeId,
+  //   String? exceptNodeId,
+  // }) async {
+  //   assert(onlyNodeId == null || exceptNodeId == null);
+  //   PocketbaseRecord? target;
+  //   if (onlyNodeId == null && exceptNodeId != null) {
+  //     target = await _getLastModifiedOnlyNodeId(exceptNodeId) //
+  //         .getSingleOrNull()
+  //         .then((val) => val?.pocketbaseRecords);
+  //   } else if (exceptNodeId == null && onlyNodeId != null) {
+  //     target = await _getLastModifiedExceptNodeId(onlyNodeId) //
+  //         .getSingleOrNull()
+  //         .then((val) => val?.pocketbaseRecords);
+  //   } else {
+  //     target = await _getLastModified() //
+  //         .getSingleOrNull()
+  //         .then((val) => val?.pocketbaseRecords);
+  //   }
+  //   return target;
+  // }
 
   @override
   Future<void> merge(CrdtChangeset changeset) async {
@@ -84,7 +128,6 @@ class CrdtDatabase extends _$CrdtDatabase with Crdt {
           // Ensure hlc and modified are strings
           record['hlc'] = record['hlc'].toString();
           record['modified'] = hlc.toString();
-
           await _insertRecord(jsonEncode(record));
         }
       }
@@ -99,6 +142,7 @@ class CrdtDatabase extends _$CrdtDatabase with Crdt {
     String? exceptNodeId,
     Hlc? modifiedOn,
     Hlc? modifiedAfter,
+    bool includeFailed = true,
   }) async {
     assert(onlyNodeId == null || exceptNodeId == null);
     assert(modifiedOn == null || modifiedAfter == null);
@@ -123,6 +167,18 @@ class CrdtDatabase extends _$CrdtDatabase with Crdt {
         final filter = filters[table]!;
         q = q..where((_) => filter);
       }
+      // if (updatedOn != null || updatedAfter != null) {
+      //   q = q
+      //     ..where((tbl) {
+      //       if (updatedOn != null) {
+      //         return tbl.updated.equals(updatedOn);
+      //       }
+      //       if (updatedAfter != null) {
+      //         return tbl.updated.isBiggerThanValue(updatedAfter);
+      //       }
+      //       throw AssertionError('unreachable');
+      //     });
+      // }
       changeset[table] = await q.get();
     }
 
@@ -138,12 +194,29 @@ class CrdtDatabase extends _$CrdtDatabase with Crdt {
     // Remove empty table changesets
     changeset.removeWhere((_, records) => records.isEmpty);
 
-    return changeset.map(
+    final changeSetData = changeset.map(
       (table, records) => MapEntry(
         table,
-        records.map((e) => e.toJson()).toList(),
+        records
+            .map((e) => e.data)
+            .map((e) => jsonDecode(e) as Map<String, Object?>)
+            .toList(),
       ),
     );
+
+    if (includeFailed) {
+      final errors = await getFailedRecords().get();
+      if (errors.isNotEmpty) {
+        for (final error in errors) {
+          // Skip max?
+          final table = error.collectionName;
+          final record = jsonDecode(error.data) as Map<String, Object?>;
+          changeSetData.putIfAbsent(table, () => []).add(record);
+        }
+      }
+    }
+
+    return changeSetData;
   }
 
   /// Changes the node id.
@@ -185,7 +258,7 @@ class CrdtDatabase extends _$CrdtDatabase with Crdt {
     ).map(_recordFromJson);
   }
 
-  Selectable<RecordModel?> getAll(String collection) {
+  Selectable<RecordModel> getAll(String collection) {
     return _getRecordsByCollectionNonDeleted(
       collection,
     ).map(_recordFromJson);
@@ -195,23 +268,22 @@ class CrdtDatabase extends _$CrdtDatabase with Crdt {
     Iterable<RecordModel> records, {
     bool isDeleted = false,
     bool notify = true,
+    bool addId = true,
   }) async {
     await transaction(() async {
       DateTime? deletedAt = isDeleted ? DateTime.now() : null;
       Hlc hlc = canonicalTime;
-      if (notify) hlc = canonicalTime.increment();
+      if (notify) hlc = hlc.increment();
       for (final record in records) {
-        const keys = ['hlc', 'node_id', 'modified'];
-        if (notify ||
-            record.data.entries.any(
-              (e) => keys.contains(e.key) && e.value == null,
-            )) {
-          record.data['hlc'] = hlc.toString();
-          record.data['node_id'] = hlc.nodeId;
-          record.data['modified'] = hlc.toString();
-          record.data['deleted_at'] = deletedAt?.toIso8601String();
+        final data = record.toJson();
+        if (addId && record.id.isEmpty) {
+          data['id'] = createPocketbaseId();
         }
-        await _insertRecord(jsonEncode(record.toJson()));
+        data['hlc'] = hlc.toString();
+        data['node_id'] = hlc.nodeId;
+        data['modified'] = hlc.toString();
+        data['deleted_at'] = deletedAt?.toIso8601String();
+        await _insertRecord(jsonEncode(data));
       }
       final tables = records.map((e) => e.collectionId).toSet();
       if (notify) onDatasetChanged(tables, hlc);
@@ -222,24 +294,43 @@ class CrdtDatabase extends _$CrdtDatabase with Crdt {
     RecordModel record, {
     bool isDeleted = false,
     bool notify = true,
+    bool addId = true,
   }) async {
     await setAll(
       [record],
       isDeleted: isDeleted,
       notify: notify,
+      addId: addId,
     );
   }
 
+  // Future<void> remove(RecordModel record) async {
+  //   await set(
+  //     record,
+  //     isDeleted: true,
+  //   );
+  // }
+
   CrdtChangeset parseChangeset(String str) {
     final items = jsonDecode(str) as Map<String, dynamic>;
+    // final changes = parseCrdtChangeset(items);
     Map<String, List<Map<String, Object?>>> changes = {};
     for (final key in items.keys) {
       final value = items[key] as List;
       changes[key] = value //
-          .map((e) => PocketbaseRecord.fromJson(e).toJson())
+          .map((e) => RecordModel.fromJson(e))
+          .map((e) => e.toJson())
           .toList();
     }
-    return changes;
+    return changes.map(
+      (table, records) => MapEntry(
+        table,
+        records
+            // .map((e) => RecordModel.fromJson(e))
+            // .map((e) => e.toJson())
+            .toList(),
+      ),
+    );
   }
 
   // final _sync = <String, bool>{};

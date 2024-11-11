@@ -29,7 +29,7 @@ QueryExecutor createExecutor(
       // driftWorkerUri: Uri.parse('worker.dart.js'),
       // driftWorkerUri: Uri.parse('drift_worker.js'),
       sqlite3Uri: Uri.parse('sqlite3.wasm'),
-      driftWorkerUri: Uri.parse('worker.dart.js'),
+      driftWorkerUri: Uri.parse('drift_worker.js'),
       localSetup: setup,
       initializeDatabase: initializeDatabase,
     );

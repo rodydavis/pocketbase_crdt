@@ -11,34 +11,35 @@ CREATE TABLE pocketbase_records (
   hlc TEXT GENERATED ALWAYS AS (json_extract(data, '$.hlc')) VIRTUAL NOT NULL MAPPED BY `const HlcConverter()`,
   modified TEXT GENERATED ALWAYS AS (json_extract(data, '$.modified')) VIRTUAL NOT NULL MAPPED BY `const HlcConverter()`,
   deleted_at TEXT GENERATED ALWAYS AS (json_extract(data, '$.deleted_at')) VIRTUAL,
+  failed_count INTEGER DEFAULT 0,
   -- synced_at DATETIME,
   UNIQUE(id, collectionId, collectionName)
 );
 
-CREATE TABLE pocketbase_records_sync (
-  record_id TEXT NOT NULL,
-  collectionId TEXT NOT NULL,
-  collectionName TEXT NOT NULL,
-  synced_at DATETIME NOT NULL,
-  PRIMARY KEY (record_id, collectionId, collectionName)
-);
+-- CREATE TABLE pocketbase_records_sync (
+--   record_id TEXT NOT NULL,
+--   collectionId TEXT NOT NULL,
+--   collectionName TEXT NOT NULL,
+--   synced_at DATETIME NOT NULL,
+--   PRIMARY KEY (record_id, collectionId, collectionName)
+-- );
 
 CREATE TABLE kv_store (
   "key" TEXT PRIMARY KEY,
   value TEXT
 );
 
-getPocketbaseRecordsSyncAll:
-SELECT * FROM pocketbase_records_sync;
+-- getPocketbaseRecordsSyncAll:
+-- SELECT * FROM pocketbase_records_sync;
 
-getPocketbaseRecordsSync:
-SELECT * FROM pocketbase_records_sync
-WHERE record_id = :record_id
-AND (collectionName = :collection OR collectionId = :collection);
+-- getPocketbaseRecordsSync:
+-- SELECT * FROM pocketbase_records_sync
+-- WHERE record_id = :record_id
+-- AND (collectionName = :collection OR collectionId = :collection);
 
-setPocketbaseRecordsSync:
-INSERT OR REPLACE INTO pocketbase_records_sync (record_id, collectionId, collectionName, synced_at)
-VALUES (:record_id, :collectionId, :collectionName, :synced_at);
+-- setPocketbaseRecordsSync:
+-- INSERT OR REPLACE INTO pocketbase_records_sync (record_id, collectionId, collectionName, synced_at)
+-- VALUES (:record_id, :collectionId, :collectionName, :synced_at);
 
 setItem:
 INSERT INTO kv_store ("key", value)
@@ -68,38 +69,38 @@ WHERE "key" = :key;
 -- WHERE id = :id
 -- AND (collectionName = :collection OR collectionId = :collection);
 
-getNewRecords:
+-- getNewRecords:
+-- -- SELECT * FROM pocketbase_records
+-- -- WHERE synced_at IS NULL;
 -- SELECT * FROM pocketbase_records
--- WHERE synced_at IS NULL;
-SELECT * FROM pocketbase_records
-WHERE NOT EXISTS (
-  SELECT 1 FROM pocketbase_records_sync
-  WHERE pocketbase_records_sync.record_id = pocketbase_records.id
-  AND pocketbase_records_sync.collectionName = pocketbase_records.collectionName
-  AND pocketbase_records_sync.collectionId = pocketbase_records.collectionId
-);
+-- WHERE NOT EXISTS (
+--   SELECT 1 FROM pocketbase_records_sync
+--   WHERE pocketbase_records_sync.record_id = pocketbase_records.id
+--   AND pocketbase_records_sync.collectionName = pocketbase_records.collectionName
+--   AND pocketbase_records_sync.collectionId = pocketbase_records.collectionId
+-- );
 
-getUpdatedRecords:
+-- getUpdatedRecords:
+-- -- SELECT * FROM pocketbase_records
+-- -- WHERE synced_at IS NOT NULL
+-- -- AND synced_at > :synced_at;
 -- SELECT * FROM pocketbase_records
--- WHERE synced_at IS NOT NULL
--- AND synced_at > :synced_at;
-SELECT * FROM pocketbase_records
-WHERE EXISTS (
-  SELECT 1 FROM pocketbase_records_sync
-  WHERE pocketbase_records_sync.record_id = pocketbase_records.id
-  AND pocketbase_records_sync.collectionName = pocketbase_records.collectionName
-  AND pocketbase_records_sync.collectionId = pocketbase_records.collectionId
-  AND synced_at > :synced_at
-);
+-- WHERE EXISTS (
+--   SELECT 1 FROM pocketbase_records_sync
+--   WHERE pocketbase_records_sync.record_id = pocketbase_records.id
+--   AND pocketbase_records_sync.collectionName = pocketbase_records.collectionName
+--   AND pocketbase_records_sync.collectionId = pocketbase_records.collectionId
+--   AND synced_at > :synced_at
+-- );
 
-setRecordSynced:
-INSERT OR REPLACE INTO pocketbase_records_sync (record_id, collectionId, collectionName, synced_at)
-VALUES (:record_id, :collectionId, :collectionName, :synced_at);
+-- setRecordSynced:
+-- INSERT OR REPLACE INTO pocketbase_records_sync (record_id, collectionId, collectionName, synced_at)
+-- VALUES (:record_id, :collectionId, :collectionName, :synced_at);
 
-getLastSyncedRecord:
-SELECT * FROM pocketbase_records_sync
-ORDER BY synced_at DESC
-LIMIT 1;
+-- getLastSyncedRecord:
+-- SELECT * FROM pocketbase_records_sync
+-- ORDER BY synced_at DESC
+-- LIMIT 1;
 
 getAllRecords:
 SELECT * FROM pocketbase_records;
@@ -111,16 +112,16 @@ SELECT * FROM pocketbase_records;
 -- LIMIT 1;
 
 _getLastModified:
-SELECT MAX(modified) AS modified
+SELECT pocketbase_records.**, MAX(modified) AS modified
 FROM pocketbase_records;
 
 _getLastModifiedOnlyNodeId:
-SELECT MAX(modified) AS modified
+SELECT pocketbase_records.**, MAX(modified) AS modified
 FROM pocketbase_records
 WHERE node_id = :node_id;
 
 _getLastModifiedExceptNodeId:
-SELECT MAX(modified) AS modified
+SELECT pocketbase_records.**, MAX(modified) AS modified
 FROM pocketbase_records
 WHERE node_id != :node_id;
 
@@ -131,6 +132,27 @@ ON CONFLICT (id, collectionId, collectionName) DO
 UPDATE SET data = :data
 WHERE compareHlc(excluded.hlc, pocketbase_records.hlc) > 0;
 -- WHERE excluded.hlc > pocketbase_records.hlc;
+
+getRecord:
+SELECT * FROM pocketbase_records
+WHERE id = :id
+AND (collectionName = :collection OR collectionId = :collection);
+
+getFailedRecords:
+SELECT * FROM pocketbase_records
+WHERE failed_count > 0;
+
+resetRecordError:
+UPDATE pocketbase_records
+SET failed_count = 0
+WHERE id = :id
+AND (collectionName = :collection OR collectionId = :collection);
+
+incrementRecordError:
+UPDATE pocketbase_records
+SET failed_count = failed_count + 1
+WHERE id = :id
+AND (collectionName = :collection OR collectionId = :collection);
 
 _getRecords:
 SELECT * FROM pocketbase_records;
@@ -168,9 +190,15 @@ _getRecordByIdAndCollectionNonDeleted:
 SELECT * FROM pocketbase_records
 WHERE id = :id
 AND (collectionName = :collection OR collectionId = :collection)
-AND deleted_at IS NULL;
+AND (deleted_at IS NULL OR deleted_at = '');
 
 _getRecordsByCollectionNonDeleted:
 SELECT * FROM pocketbase_records
 WHERE (collectionName = :collection OR collectionId = :collection)
-AND deleted_at IS NOT NULL;
+AND (deleted_at IS NULL OR deleted_at = '');
+
+_deleteRecordByIdAndCollection:
+UPDATE pocketbase_records
+SET data = json_set(data, '$.deleted_at', :deleted_at)
+WHERE id = :id
+AND (collectionName = :collection OR collectionId = :collection);

@@ -109,6 +109,14 @@ class PocketbaseRecords extends Table
       requiredDuringInsert: false,
       $customConstraints:
           'GENERATED ALWAYS AS (json_extract(data, \'\$.deleted_at\')) VIRTUAL');
+  static const VerificationMeta _failedCountMeta =
+      const VerificationMeta('failedCount');
+  late final GeneratedColumn<int> failedCount = GeneratedColumn<int>(
+      'failed_count', aliasedName, true,
+      type: DriftSqlType.int,
+      requiredDuringInsert: false,
+      $customConstraints: 'DEFAULT 0',
+      defaultValue: const CustomExpression('0'));
   @override
   List<GeneratedColumn> get $columns => [
         id,
@@ -120,7 +128,8 @@ class PocketbaseRecords extends Table
         nodeId,
         hlc,
         modified,
-        deletedAt
+        deletedAt,
+        failedCount
       ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -169,6 +178,12 @@ class PocketbaseRecords extends Table
       context.handle(_deletedAtMeta,
           deletedAt.isAcceptableOrUnknown(data['deleted_at']!, _deletedAtMeta));
     }
+    if (data.containsKey('failed_count')) {
+      context.handle(
+          _failedCountMeta,
+          failedCount.isAcceptableOrUnknown(
+              data['failed_count']!, _failedCountMeta));
+    }
     return context;
   }
 
@@ -203,6 +218,8 @@ class PocketbaseRecords extends Table
           .read(DriftSqlType.string, data['${effectivePrefix}modified'])!),
       deletedAt: attachedDatabase.typeMapping
           .read(DriftSqlType.string, data['${effectivePrefix}deleted_at']),
+      failedCount: attachedDatabase.typeMapping
+          .read(DriftSqlType.int, data['${effectivePrefix}failed_count']),
     );
   }
 
@@ -234,6 +251,7 @@ class PocketbaseRecord extends DataClass
   final Hlc hlc;
   final Hlc modified;
   final String? deletedAt;
+  final int? failedCount;
   const PocketbaseRecord(
       {required this.id,
       required this.data,
@@ -244,17 +262,24 @@ class PocketbaseRecord extends DataClass
       required this.nodeId,
       required this.hlc,
       required this.modified,
-      this.deletedAt});
+      this.deletedAt,
+      this.failedCount});
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
     final map = <String, Expression>{};
     map['data'] = Variable<String>(data);
+    if (!nullToAbsent || failedCount != null) {
+      map['failed_count'] = Variable<int>(failedCount);
+    }
     return map;
   }
 
   PocketbaseRecordsCompanion toCompanion(bool nullToAbsent) {
     return PocketbaseRecordsCompanion(
       data: Value(data),
+      failedCount: failedCount == null && nullToAbsent
+          ? const Value.absent()
+          : Value(failedCount),
     );
   }
 
@@ -274,6 +299,7 @@ class PocketbaseRecord extends DataClass
       modified: PocketbaseRecords.$convertermodified
           .fromJson(serializer.fromJson<String>(json['modified'])),
       deletedAt: serializer.fromJson<String?>(json['deleted_at']),
+      failedCount: serializer.fromJson<int?>(json['failed_count']),
     );
   }
   @override
@@ -292,6 +318,7 @@ class PocketbaseRecord extends DataClass
       'modified': serializer.toJson<String>(
           PocketbaseRecords.$convertermodified.toJson(modified)),
       'deleted_at': serializer.toJson<String?>(deletedAt),
+      'failed_count': serializer.toJson<int?>(failedCount),
     };
   }
 
@@ -305,7 +332,8 @@ class PocketbaseRecord extends DataClass
           String? nodeId,
           Hlc? hlc,
           Hlc? modified,
-          Value<String?> deletedAt = const Value.absent()}) =>
+          Value<String?> deletedAt = const Value.absent(),
+          Value<int?> failedCount = const Value.absent()}) =>
       PocketbaseRecord(
         id: id ?? this.id,
         data: data ?? this.data,
@@ -317,6 +345,7 @@ class PocketbaseRecord extends DataClass
         hlc: hlc ?? this.hlc,
         modified: modified ?? this.modified,
         deletedAt: deletedAt.present ? deletedAt.value : this.deletedAt,
+        failedCount: failedCount.present ? failedCount.value : this.failedCount,
       );
   @override
   String toString() {
@@ -330,14 +359,15 @@ class PocketbaseRecord extends DataClass
           ..write('nodeId: $nodeId, ')
           ..write('hlc: $hlc, ')
           ..write('modified: $modified, ')
-          ..write('deletedAt: $deletedAt')
+          ..write('deletedAt: $deletedAt, ')
+          ..write('failedCount: $failedCount')
           ..write(')'))
         .toString();
   }
 
   @override
   int get hashCode => Object.hash(id, data, collectionId, collectionName,
-      created, updated, nodeId, hlc, modified, deletedAt);
+      created, updated, nodeId, hlc, modified, deletedAt, failedCount);
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -351,34 +381,41 @@ class PocketbaseRecord extends DataClass
           other.nodeId == this.nodeId &&
           other.hlc == this.hlc &&
           other.modified == this.modified &&
-          other.deletedAt == this.deletedAt);
+          other.deletedAt == this.deletedAt &&
+          other.failedCount == this.failedCount);
 }
 
 class PocketbaseRecordsCompanion extends UpdateCompanion<PocketbaseRecord> {
   final Value<String> data;
+  final Value<int?> failedCount;
   final Value<int> rowid;
   const PocketbaseRecordsCompanion({
     this.data = const Value.absent(),
+    this.failedCount = const Value.absent(),
     this.rowid = const Value.absent(),
   });
   PocketbaseRecordsCompanion.insert({
     this.data = const Value.absent(),
+    this.failedCount = const Value.absent(),
     this.rowid = const Value.absent(),
   });
   static Insertable<PocketbaseRecord> custom({
     Expression<String>? data,
+    Expression<int>? failedCount,
     Expression<int>? rowid,
   }) {
     return RawValuesInsertable({
       if (data != null) 'data': data,
+      if (failedCount != null) 'failed_count': failedCount,
       if (rowid != null) 'rowid': rowid,
     });
   }
 
   PocketbaseRecordsCompanion copyWith(
-      {Value<String>? data, Value<int>? rowid}) {
+      {Value<String>? data, Value<int?>? failedCount, Value<int>? rowid}) {
     return PocketbaseRecordsCompanion(
       data: data ?? this.data,
+      failedCount: failedCount ?? this.failedCount,
       rowid: rowid ?? this.rowid,
     );
   }
@@ -388,6 +425,9 @@ class PocketbaseRecordsCompanion extends UpdateCompanion<PocketbaseRecord> {
     final map = <String, Expression>{};
     if (data.present) {
       map['data'] = Variable<String>(data.value);
+    }
+    if (failedCount.present) {
+      map['failed_count'] = Variable<int>(failedCount.value);
     }
     if (rowid.present) {
       map['rowid'] = Variable<int>(rowid.value);
@@ -399,305 +439,7 @@ class PocketbaseRecordsCompanion extends UpdateCompanion<PocketbaseRecord> {
   String toString() {
     return (StringBuffer('PocketbaseRecordsCompanion(')
           ..write('data: $data, ')
-          ..write('rowid: $rowid')
-          ..write(')'))
-        .toString();
-  }
-}
-
-class PocketbaseRecordsSync extends Table
-    with TableInfo<PocketbaseRecordsSync, PocketbaseRecordsSyncData> {
-  @override
-  final GeneratedDatabase attachedDatabase;
-  final String? _alias;
-  PocketbaseRecordsSync(this.attachedDatabase, [this._alias]);
-  static const VerificationMeta _recordIdMeta =
-      const VerificationMeta('recordId');
-  late final GeneratedColumn<String> recordId = GeneratedColumn<String>(
-      'record_id', aliasedName, false,
-      type: DriftSqlType.string,
-      requiredDuringInsert: true,
-      $customConstraints: 'NOT NULL');
-  static const VerificationMeta _collectionIdMeta =
-      const VerificationMeta('collectionId');
-  late final GeneratedColumn<String> collectionId = GeneratedColumn<String>(
-      'collectionId', aliasedName, false,
-      type: DriftSqlType.string,
-      requiredDuringInsert: true,
-      $customConstraints: 'NOT NULL');
-  static const VerificationMeta _collectionNameMeta =
-      const VerificationMeta('collectionName');
-  late final GeneratedColumn<String> collectionName = GeneratedColumn<String>(
-      'collectionName', aliasedName, false,
-      type: DriftSqlType.string,
-      requiredDuringInsert: true,
-      $customConstraints: 'NOT NULL');
-  static const VerificationMeta _syncedAtMeta =
-      const VerificationMeta('syncedAt');
-  late final GeneratedColumn<DateTime> syncedAt = GeneratedColumn<DateTime>(
-      'synced_at', aliasedName, false,
-      type: DriftSqlType.dateTime,
-      requiredDuringInsert: true,
-      $customConstraints: 'NOT NULL');
-  @override
-  List<GeneratedColumn> get $columns =>
-      [recordId, collectionId, collectionName, syncedAt];
-  @override
-  String get aliasedName => _alias ?? actualTableName;
-  @override
-  String get actualTableName => $name;
-  static const String $name = 'pocketbase_records_sync';
-  @override
-  VerificationContext validateIntegrity(
-      Insertable<PocketbaseRecordsSyncData> instance,
-      {bool isInserting = false}) {
-    final context = VerificationContext();
-    final data = instance.toColumns(true);
-    if (data.containsKey('record_id')) {
-      context.handle(_recordIdMeta,
-          recordId.isAcceptableOrUnknown(data['record_id']!, _recordIdMeta));
-    } else if (isInserting) {
-      context.missing(_recordIdMeta);
-    }
-    if (data.containsKey('collectionId')) {
-      context.handle(
-          _collectionIdMeta,
-          collectionId.isAcceptableOrUnknown(
-              data['collectionId']!, _collectionIdMeta));
-    } else if (isInserting) {
-      context.missing(_collectionIdMeta);
-    }
-    if (data.containsKey('collectionName')) {
-      context.handle(
-          _collectionNameMeta,
-          collectionName.isAcceptableOrUnknown(
-              data['collectionName']!, _collectionNameMeta));
-    } else if (isInserting) {
-      context.missing(_collectionNameMeta);
-    }
-    if (data.containsKey('synced_at')) {
-      context.handle(_syncedAtMeta,
-          syncedAt.isAcceptableOrUnknown(data['synced_at']!, _syncedAtMeta));
-    } else if (isInserting) {
-      context.missing(_syncedAtMeta);
-    }
-    return context;
-  }
-
-  @override
-  Set<GeneratedColumn> get $primaryKey =>
-      {recordId, collectionId, collectionName};
-  @override
-  PocketbaseRecordsSyncData map(Map<String, dynamic> data,
-      {String? tablePrefix}) {
-    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
-    return PocketbaseRecordsSyncData(
-      recordId: attachedDatabase.typeMapping
-          .read(DriftSqlType.string, data['${effectivePrefix}record_id'])!,
-      collectionId: attachedDatabase.typeMapping
-          .read(DriftSqlType.string, data['${effectivePrefix}collectionId'])!,
-      collectionName: attachedDatabase.typeMapping
-          .read(DriftSqlType.string, data['${effectivePrefix}collectionName'])!,
-      syncedAt: attachedDatabase.typeMapping
-          .read(DriftSqlType.dateTime, data['${effectivePrefix}synced_at'])!,
-    );
-  }
-
-  @override
-  PocketbaseRecordsSync createAlias(String alias) {
-    return PocketbaseRecordsSync(attachedDatabase, alias);
-  }
-
-  @override
-  List<String> get customConstraints =>
-      const ['PRIMARY KEY(record_id, collectionId, collectionName)'];
-  @override
-  bool get dontWriteConstraints => true;
-}
-
-class PocketbaseRecordsSyncData extends DataClass
-    implements Insertable<PocketbaseRecordsSyncData> {
-  final String recordId;
-  final String collectionId;
-  final String collectionName;
-  final DateTime syncedAt;
-  const PocketbaseRecordsSyncData(
-      {required this.recordId,
-      required this.collectionId,
-      required this.collectionName,
-      required this.syncedAt});
-  @override
-  Map<String, Expression> toColumns(bool nullToAbsent) {
-    final map = <String, Expression>{};
-    map['record_id'] = Variable<String>(recordId);
-    map['collectionId'] = Variable<String>(collectionId);
-    map['collectionName'] = Variable<String>(collectionName);
-    map['synced_at'] = Variable<DateTime>(syncedAt);
-    return map;
-  }
-
-  PocketbaseRecordsSyncCompanion toCompanion(bool nullToAbsent) {
-    return PocketbaseRecordsSyncCompanion(
-      recordId: Value(recordId),
-      collectionId: Value(collectionId),
-      collectionName: Value(collectionName),
-      syncedAt: Value(syncedAt),
-    );
-  }
-
-  factory PocketbaseRecordsSyncData.fromJson(Map<String, dynamic> json,
-      {ValueSerializer? serializer}) {
-    serializer ??= driftRuntimeOptions.defaultSerializer;
-    return PocketbaseRecordsSyncData(
-      recordId: serializer.fromJson<String>(json['record_id']),
-      collectionId: serializer.fromJson<String>(json['collectionId']),
-      collectionName: serializer.fromJson<String>(json['collectionName']),
-      syncedAt: serializer.fromJson<DateTime>(json['synced_at']),
-    );
-  }
-  @override
-  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
-    serializer ??= driftRuntimeOptions.defaultSerializer;
-    return <String, dynamic>{
-      'record_id': serializer.toJson<String>(recordId),
-      'collectionId': serializer.toJson<String>(collectionId),
-      'collectionName': serializer.toJson<String>(collectionName),
-      'synced_at': serializer.toJson<DateTime>(syncedAt),
-    };
-  }
-
-  PocketbaseRecordsSyncData copyWith(
-          {String? recordId,
-          String? collectionId,
-          String? collectionName,
-          DateTime? syncedAt}) =>
-      PocketbaseRecordsSyncData(
-        recordId: recordId ?? this.recordId,
-        collectionId: collectionId ?? this.collectionId,
-        collectionName: collectionName ?? this.collectionName,
-        syncedAt: syncedAt ?? this.syncedAt,
-      );
-  PocketbaseRecordsSyncData copyWithCompanion(
-      PocketbaseRecordsSyncCompanion data) {
-    return PocketbaseRecordsSyncData(
-      recordId: data.recordId.present ? data.recordId.value : this.recordId,
-      collectionId: data.collectionId.present
-          ? data.collectionId.value
-          : this.collectionId,
-      collectionName: data.collectionName.present
-          ? data.collectionName.value
-          : this.collectionName,
-      syncedAt: data.syncedAt.present ? data.syncedAt.value : this.syncedAt,
-    );
-  }
-
-  @override
-  String toString() {
-    return (StringBuffer('PocketbaseRecordsSyncData(')
-          ..write('recordId: $recordId, ')
-          ..write('collectionId: $collectionId, ')
-          ..write('collectionName: $collectionName, ')
-          ..write('syncedAt: $syncedAt')
-          ..write(')'))
-        .toString();
-  }
-
-  @override
-  int get hashCode =>
-      Object.hash(recordId, collectionId, collectionName, syncedAt);
-  @override
-  bool operator ==(Object other) =>
-      identical(this, other) ||
-      (other is PocketbaseRecordsSyncData &&
-          other.recordId == this.recordId &&
-          other.collectionId == this.collectionId &&
-          other.collectionName == this.collectionName &&
-          other.syncedAt == this.syncedAt);
-}
-
-class PocketbaseRecordsSyncCompanion
-    extends UpdateCompanion<PocketbaseRecordsSyncData> {
-  final Value<String> recordId;
-  final Value<String> collectionId;
-  final Value<String> collectionName;
-  final Value<DateTime> syncedAt;
-  final Value<int> rowid;
-  const PocketbaseRecordsSyncCompanion({
-    this.recordId = const Value.absent(),
-    this.collectionId = const Value.absent(),
-    this.collectionName = const Value.absent(),
-    this.syncedAt = const Value.absent(),
-    this.rowid = const Value.absent(),
-  });
-  PocketbaseRecordsSyncCompanion.insert({
-    required String recordId,
-    required String collectionId,
-    required String collectionName,
-    required DateTime syncedAt,
-    this.rowid = const Value.absent(),
-  })  : recordId = Value(recordId),
-        collectionId = Value(collectionId),
-        collectionName = Value(collectionName),
-        syncedAt = Value(syncedAt);
-  static Insertable<PocketbaseRecordsSyncData> custom({
-    Expression<String>? recordId,
-    Expression<String>? collectionId,
-    Expression<String>? collectionName,
-    Expression<DateTime>? syncedAt,
-    Expression<int>? rowid,
-  }) {
-    return RawValuesInsertable({
-      if (recordId != null) 'record_id': recordId,
-      if (collectionId != null) 'collectionId': collectionId,
-      if (collectionName != null) 'collectionName': collectionName,
-      if (syncedAt != null) 'synced_at': syncedAt,
-      if (rowid != null) 'rowid': rowid,
-    });
-  }
-
-  PocketbaseRecordsSyncCompanion copyWith(
-      {Value<String>? recordId,
-      Value<String>? collectionId,
-      Value<String>? collectionName,
-      Value<DateTime>? syncedAt,
-      Value<int>? rowid}) {
-    return PocketbaseRecordsSyncCompanion(
-      recordId: recordId ?? this.recordId,
-      collectionId: collectionId ?? this.collectionId,
-      collectionName: collectionName ?? this.collectionName,
-      syncedAt: syncedAt ?? this.syncedAt,
-      rowid: rowid ?? this.rowid,
-    );
-  }
-
-  @override
-  Map<String, Expression> toColumns(bool nullToAbsent) {
-    final map = <String, Expression>{};
-    if (recordId.present) {
-      map['record_id'] = Variable<String>(recordId.value);
-    }
-    if (collectionId.present) {
-      map['collectionId'] = Variable<String>(collectionId.value);
-    }
-    if (collectionName.present) {
-      map['collectionName'] = Variable<String>(collectionName.value);
-    }
-    if (syncedAt.present) {
-      map['synced_at'] = Variable<DateTime>(syncedAt.value);
-    }
-    if (rowid.present) {
-      map['rowid'] = Variable<int>(rowid.value);
-    }
-    return map;
-  }
-
-  @override
-  String toString() {
-    return (StringBuffer('PocketbaseRecordsSyncCompanion(')
-          ..write('recordId: $recordId, ')
-          ..write('collectionId: $collectionId, ')
-          ..write('collectionName: $collectionName, ')
-          ..write('syncedAt: $syncedAt, ')
+          ..write('failedCount: $failedCount, ')
           ..write('rowid: $rowid')
           ..write(')'))
         .toString();
@@ -905,44 +647,7 @@ abstract class _$CrdtDatabase extends GeneratedDatabase {
   _$CrdtDatabase(QueryExecutor e) : super(e);
   $CrdtDatabaseManager get managers => $CrdtDatabaseManager(this);
   late final PocketbaseRecords pocketbaseRecords = PocketbaseRecords(this);
-  late final PocketbaseRecordsSync pocketbaseRecordsSync =
-      PocketbaseRecordsSync(this);
   late final KvStore kvStore = KvStore(this);
-  Selectable<PocketbaseRecordsSyncData> getPocketbaseRecordsSyncAll() {
-    return customSelect('SELECT * FROM pocketbase_records_sync',
-        variables: [],
-        readsFrom: {
-          pocketbaseRecordsSync,
-        }).asyncMap(pocketbaseRecordsSync.mapFromRow);
-  }
-
-  Selectable<PocketbaseRecordsSyncData> getPocketbaseRecordsSync(
-      String recordId, String collection) {
-    return customSelect(
-        'SELECT * FROM pocketbase_records_sync WHERE record_id = ?1 AND(collectionName = ?2 OR collectionId = ?2)',
-        variables: [
-          Variable<String>(recordId),
-          Variable<String>(collection)
-        ],
-        readsFrom: {
-          pocketbaseRecordsSync,
-        }).asyncMap(pocketbaseRecordsSync.mapFromRow);
-  }
-
-  Future<int> setPocketbaseRecordsSync(String recordId, String collectionId,
-      String collectionName, DateTime syncedAt) {
-    return customInsert(
-      'INSERT OR REPLACE INTO pocketbase_records_sync (record_id, collectionId, collectionName, synced_at) VALUES (?1, ?2, ?3, ?4)',
-      variables: [
-        Variable<String>(recordId),
-        Variable<String>(collectionId),
-        Variable<String>(collectionName),
-        Variable<DateTime>(syncedAt)
-      ],
-      updates: {pocketbaseRecordsSync},
-    );
-  }
-
   Future<int> setItem(String? key, String? value) {
     return customInsert(
       'INSERT INTO kv_store ("key", value) VALUES (?1, ?2) ON CONFLICT ("key") DO UPDATE SET value = ?2',
@@ -970,51 +675,6 @@ abstract class _$CrdtDatabase extends GeneratedDatabase {
     );
   }
 
-  Selectable<PocketbaseRecord> getNewRecords() {
-    return customSelect(
-        'SELECT * FROM pocketbase_records WHERE NOT EXISTS (SELECT 1 AS _c0 FROM pocketbase_records_sync WHERE pocketbase_records_sync.record_id = pocketbase_records.id AND pocketbase_records_sync.collectionName = pocketbase_records.collectionName AND pocketbase_records_sync.collectionId = pocketbase_records.collectionId)',
-        variables: [],
-        readsFrom: {
-          pocketbaseRecords,
-          pocketbaseRecordsSync,
-        }).asyncMap(pocketbaseRecords.mapFromRow);
-  }
-
-  Selectable<PocketbaseRecord> getUpdatedRecords(DateTime syncedAt) {
-    return customSelect(
-        'SELECT * FROM pocketbase_records WHERE EXISTS (SELECT 1 AS _c0 FROM pocketbase_records_sync WHERE pocketbase_records_sync.record_id = pocketbase_records.id AND pocketbase_records_sync.collectionName = pocketbase_records.collectionName AND pocketbase_records_sync.collectionId = pocketbase_records.collectionId AND synced_at > ?1)',
-        variables: [
-          Variable<DateTime>(syncedAt)
-        ],
-        readsFrom: {
-          pocketbaseRecords,
-          pocketbaseRecordsSync,
-        }).asyncMap(pocketbaseRecords.mapFromRow);
-  }
-
-  Future<int> setRecordSynced(String recordId, String collectionId,
-      String collectionName, DateTime syncedAt) {
-    return customInsert(
-      'INSERT OR REPLACE INTO pocketbase_records_sync (record_id, collectionId, collectionName, synced_at) VALUES (?1, ?2, ?3, ?4)',
-      variables: [
-        Variable<String>(recordId),
-        Variable<String>(collectionId),
-        Variable<String>(collectionName),
-        Variable<DateTime>(syncedAt)
-      ],
-      updates: {pocketbaseRecordsSync},
-    );
-  }
-
-  Selectable<PocketbaseRecordsSyncData> getLastSyncedRecord() {
-    return customSelect(
-        'SELECT * FROM pocketbase_records_sync ORDER BY synced_at DESC LIMIT 1',
-        variables: [],
-        readsFrom: {
-          pocketbaseRecordsSync,
-        }).asyncMap(pocketbaseRecordsSync.mapFromRow);
-  }
-
   Selectable<PocketbaseRecord> getAllRecords() {
     return customSelect('SELECT * FROM pocketbase_records',
         variables: [],
@@ -1023,41 +683,55 @@ abstract class _$CrdtDatabase extends GeneratedDatabase {
         }).asyncMap(pocketbaseRecords.mapFromRow);
   }
 
-  Selectable<Hlc?> _getLastModified() {
+  Selectable<GetLastModifiedResult> _getLastModified() {
     return customSelect(
-        'SELECT MAX(modified) AS modified FROM pocketbase_records',
+        'SELECT"pocketbase_records"."id" AS "nested_0.id", "pocketbase_records"."data" AS "nested_0.data", "pocketbase_records"."collectionId" AS "nested_0.collectionId", "pocketbase_records"."collectionName" AS "nested_0.collectionName", "pocketbase_records"."created" AS "nested_0.created", "pocketbase_records"."updated" AS "nested_0.updated", "pocketbase_records"."node_id" AS "nested_0.node_id", "pocketbase_records"."hlc" AS "nested_0.hlc", "pocketbase_records"."modified" AS "nested_0.modified", "pocketbase_records"."deleted_at" AS "nested_0.deleted_at", "pocketbase_records"."failed_count" AS "nested_0.failed_count", MAX(modified) AS modified FROM pocketbase_records',
         variables: [],
         readsFrom: {
           pocketbaseRecords,
-        }).map((QueryRow row) => NullAwareTypeConverter.wrapFromSql(
-        PocketbaseRecords.$convertermodified,
-        row.readNullable<String>('modified')));
+        }).asyncMap((QueryRow row) async => GetLastModifiedResult(
+          pocketbaseRecords:
+              await pocketbaseRecords.mapFromRow(row, tablePrefix: 'nested_0'),
+          modified: NullAwareTypeConverter.wrapFromSql(
+              PocketbaseRecords.$convertermodified,
+              row.readNullable<String>('modified')),
+        ));
   }
 
-  Selectable<Hlc?> _getLastModifiedOnlyNodeId(String nodeId) {
+  Selectable<GetLastModifiedOnlyNodeIdResult> _getLastModifiedOnlyNodeId(
+      String nodeId) {
     return customSelect(
-        'SELECT MAX(modified) AS modified FROM pocketbase_records WHERE node_id = ?1',
+        'SELECT"pocketbase_records"."id" AS "nested_0.id", "pocketbase_records"."data" AS "nested_0.data", "pocketbase_records"."collectionId" AS "nested_0.collectionId", "pocketbase_records"."collectionName" AS "nested_0.collectionName", "pocketbase_records"."created" AS "nested_0.created", "pocketbase_records"."updated" AS "nested_0.updated", "pocketbase_records"."node_id" AS "nested_0.node_id", "pocketbase_records"."hlc" AS "nested_0.hlc", "pocketbase_records"."modified" AS "nested_0.modified", "pocketbase_records"."deleted_at" AS "nested_0.deleted_at", "pocketbase_records"."failed_count" AS "nested_0.failed_count", MAX(modified) AS modified FROM pocketbase_records WHERE node_id = ?1',
         variables: [
           Variable<String>(nodeId)
         ],
         readsFrom: {
           pocketbaseRecords,
-        }).map((QueryRow row) => NullAwareTypeConverter.wrapFromSql(
-        PocketbaseRecords.$convertermodified,
-        row.readNullable<String>('modified')));
+        }).asyncMap((QueryRow row) async => GetLastModifiedOnlyNodeIdResult(
+          pocketbaseRecords:
+              await pocketbaseRecords.mapFromRow(row, tablePrefix: 'nested_0'),
+          modified: NullAwareTypeConverter.wrapFromSql(
+              PocketbaseRecords.$convertermodified,
+              row.readNullable<String>('modified')),
+        ));
   }
 
-  Selectable<Hlc?> _getLastModifiedExceptNodeId(String nodeId) {
+  Selectable<GetLastModifiedExceptNodeIdResult> _getLastModifiedExceptNodeId(
+      String nodeId) {
     return customSelect(
-        'SELECT MAX(modified) AS modified FROM pocketbase_records WHERE node_id != ?1',
+        'SELECT"pocketbase_records"."id" AS "nested_0.id", "pocketbase_records"."data" AS "nested_0.data", "pocketbase_records"."collectionId" AS "nested_0.collectionId", "pocketbase_records"."collectionName" AS "nested_0.collectionName", "pocketbase_records"."created" AS "nested_0.created", "pocketbase_records"."updated" AS "nested_0.updated", "pocketbase_records"."node_id" AS "nested_0.node_id", "pocketbase_records"."hlc" AS "nested_0.hlc", "pocketbase_records"."modified" AS "nested_0.modified", "pocketbase_records"."deleted_at" AS "nested_0.deleted_at", "pocketbase_records"."failed_count" AS "nested_0.failed_count", MAX(modified) AS modified FROM pocketbase_records WHERE node_id != ?1',
         variables: [
           Variable<String>(nodeId)
         ],
         readsFrom: {
           pocketbaseRecords,
-        }).map((QueryRow row) => NullAwareTypeConverter.wrapFromSql(
-        PocketbaseRecords.$convertermodified,
-        row.readNullable<String>('modified')));
+        }).asyncMap((QueryRow row) async => GetLastModifiedExceptNodeIdResult(
+          pocketbaseRecords:
+              await pocketbaseRecords.mapFromRow(row, tablePrefix: 'nested_0'),
+          modified: NullAwareTypeConverter.wrapFromSql(
+              PocketbaseRecords.$convertermodified,
+              row.readNullable<String>('modified')),
+        ));
   }
 
   Future<int> _insertRecord(String data) {
@@ -1065,6 +739,45 @@ abstract class _$CrdtDatabase extends GeneratedDatabase {
       'INSERT INTO pocketbase_records (data) VALUES (?1) ON CONFLICT (id, collectionId, collectionName) DO UPDATE SET data = ?1 WHERE compareHlc(excluded.hlc, pocketbase_records.hlc) > 0',
       variables: [Variable<String>(data)],
       updates: {pocketbaseRecords},
+    );
+  }
+
+  Selectable<PocketbaseRecord> getRecord(String id, String collection) {
+    return customSelect(
+        'SELECT * FROM pocketbase_records WHERE id = ?1 AND(collectionName = ?2 OR collectionId = ?2)',
+        variables: [
+          Variable<String>(id),
+          Variable<String>(collection)
+        ],
+        readsFrom: {
+          pocketbaseRecords,
+        }).asyncMap(pocketbaseRecords.mapFromRow);
+  }
+
+  Selectable<PocketbaseRecord> getFailedRecords() {
+    return customSelect(
+        'SELECT * FROM pocketbase_records WHERE failed_count > 0',
+        variables: [],
+        readsFrom: {
+          pocketbaseRecords,
+        }).asyncMap(pocketbaseRecords.mapFromRow);
+  }
+
+  Future<int> resetRecordError(String id, String collection) {
+    return customUpdate(
+      'UPDATE pocketbase_records SET failed_count = 0 WHERE id = ?1 AND(collectionName = ?2 OR collectionId = ?2)',
+      variables: [Variable<String>(id), Variable<String>(collection)],
+      updates: {pocketbaseRecords},
+      updateKind: UpdateKind.update,
+    );
+  }
+
+  Future<int> incrementRecordError(String id, String collection) {
+    return customUpdate(
+      'UPDATE pocketbase_records SET failed_count = failed_count + 1 WHERE id = ?1 AND(collectionName = ?2 OR collectionId = ?2)',
+      variables: [Variable<String>(id), Variable<String>(collection)],
+      updates: {pocketbaseRecords},
+      updateKind: UpdateKind.update,
     );
   }
 
@@ -1126,7 +839,7 @@ abstract class _$CrdtDatabase extends GeneratedDatabase {
   Selectable<PocketbaseRecord> _getRecordByIdAndCollectionNonDeleted(
       String id, String collection) {
     return customSelect(
-        'SELECT * FROM pocketbase_records WHERE id = ?1 AND(collectionName = ?2 OR collectionId = ?2)AND deleted_at IS NULL',
+        'SELECT * FROM pocketbase_records WHERE id = ?1 AND(collectionName = ?2 OR collectionId = ?2)AND(deleted_at IS NULL OR deleted_at = \'\')',
         variables: [
           Variable<String>(id),
           Variable<String>(collection)
@@ -1139,7 +852,7 @@ abstract class _$CrdtDatabase extends GeneratedDatabase {
   Selectable<PocketbaseRecord> _getRecordsByCollectionNonDeleted(
       String collection) {
     return customSelect(
-        'SELECT * FROM pocketbase_records WHERE(collectionName = ?1 OR collectionId = ?1)AND deleted_at IS NOT NULL',
+        'SELECT * FROM pocketbase_records WHERE(collectionName = ?1 OR collectionId = ?1)AND(deleted_at IS NULL OR deleted_at = \'\')',
         variables: [
           Variable<String>(collection)
         ],
@@ -1148,22 +861,38 @@ abstract class _$CrdtDatabase extends GeneratedDatabase {
         }).asyncMap(pocketbaseRecords.mapFromRow);
   }
 
+  Future<int> _deleteRecordByIdAndCollection(
+      String deletedAt, String id, String collection) {
+    return customUpdate(
+      'UPDATE pocketbase_records SET data = json_set(data, \'\$.deleted_at\', ?1) WHERE id = ?2 AND(collectionName = ?3 OR collectionId = ?3)',
+      variables: [
+        Variable<String>(deletedAt),
+        Variable<String>(id),
+        Variable<String>(collection)
+      ],
+      updates: {pocketbaseRecords},
+      updateKind: UpdateKind.update,
+    );
+  }
+
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
   @override
   List<DatabaseSchemaEntity> get allSchemaEntities =>
-      [pocketbaseRecords, pocketbaseRecordsSync, kvStore];
+      [pocketbaseRecords, kvStore];
 }
 
 typedef $PocketbaseRecordsCreateCompanionBuilder = PocketbaseRecordsCompanion
     Function({
   Value<String> data,
+  Value<int?> failedCount,
   Value<int> rowid,
 });
 typedef $PocketbaseRecordsUpdateCompanionBuilder = PocketbaseRecordsCompanion
     Function({
   Value<String> data,
+  Value<int?> failedCount,
   Value<int> rowid,
 });
 
@@ -1210,6 +939,9 @@ class $PocketbaseRecordsFilterComposer
 
   ColumnFilters<String> get deletedAt => $composableBuilder(
       column: $table.deletedAt, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<int> get failedCount => $composableBuilder(
+      column: $table.failedCount, builder: (column) => ColumnFilters(column));
 }
 
 class $PocketbaseRecordsOrderingComposer
@@ -1252,6 +984,9 @@ class $PocketbaseRecordsOrderingComposer
 
   ColumnOrderings<String> get deletedAt => $composableBuilder(
       column: $table.deletedAt, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<int> get failedCount => $composableBuilder(
+      column: $table.failedCount, builder: (column) => ColumnOrderings(column));
 }
 
 class $PocketbaseRecordsAnnotationComposer
@@ -1292,6 +1027,9 @@ class $PocketbaseRecordsAnnotationComposer
 
   GeneratedColumn<String> get deletedAt =>
       $composableBuilder(column: $table.deletedAt, builder: (column) => column);
+
+  GeneratedColumn<int> get failedCount => $composableBuilder(
+      column: $table.failedCount, builder: (column) => column);
 }
 
 class $PocketbaseRecordsTableManager extends RootTableManager<
@@ -1321,18 +1059,22 @@ class $PocketbaseRecordsTableManager extends RootTableManager<
               $PocketbaseRecordsAnnotationComposer($db: db, $table: table),
           updateCompanionCallback: ({
             Value<String> data = const Value.absent(),
+            Value<int?> failedCount = const Value.absent(),
             Value<int> rowid = const Value.absent(),
           }) =>
               PocketbaseRecordsCompanion(
             data: data,
+            failedCount: failedCount,
             rowid: rowid,
           ),
           createCompanionCallback: ({
             Value<String> data = const Value.absent(),
+            Value<int?> failedCount = const Value.absent(),
             Value<int> rowid = const Value.absent(),
           }) =>
               PocketbaseRecordsCompanion.insert(
             data: data,
+            failedCount: failedCount,
             rowid: rowid,
           ),
           withReferenceMapper: (p0) => p0
@@ -1356,170 +1098,6 @@ typedef $PocketbaseRecordsProcessedTableManager = ProcessedTableManager<
       BaseReferences<_$CrdtDatabase, PocketbaseRecords, PocketbaseRecord>
     ),
     PocketbaseRecord,
-    PrefetchHooks Function()>;
-typedef $PocketbaseRecordsSyncCreateCompanionBuilder
-    = PocketbaseRecordsSyncCompanion Function({
-  required String recordId,
-  required String collectionId,
-  required String collectionName,
-  required DateTime syncedAt,
-  Value<int> rowid,
-});
-typedef $PocketbaseRecordsSyncUpdateCompanionBuilder
-    = PocketbaseRecordsSyncCompanion Function({
-  Value<String> recordId,
-  Value<String> collectionId,
-  Value<String> collectionName,
-  Value<DateTime> syncedAt,
-  Value<int> rowid,
-});
-
-class $PocketbaseRecordsSyncFilterComposer
-    extends Composer<_$CrdtDatabase, PocketbaseRecordsSync> {
-  $PocketbaseRecordsSyncFilterComposer({
-    required super.$db,
-    required super.$table,
-    super.joinBuilder,
-    super.$addJoinBuilderToRootComposer,
-    super.$removeJoinBuilderFromRootComposer,
-  });
-  ColumnFilters<String> get recordId => $composableBuilder(
-      column: $table.recordId, builder: (column) => ColumnFilters(column));
-
-  ColumnFilters<String> get collectionId => $composableBuilder(
-      column: $table.collectionId, builder: (column) => ColumnFilters(column));
-
-  ColumnFilters<String> get collectionName => $composableBuilder(
-      column: $table.collectionName,
-      builder: (column) => ColumnFilters(column));
-
-  ColumnFilters<DateTime> get syncedAt => $composableBuilder(
-      column: $table.syncedAt, builder: (column) => ColumnFilters(column));
-}
-
-class $PocketbaseRecordsSyncOrderingComposer
-    extends Composer<_$CrdtDatabase, PocketbaseRecordsSync> {
-  $PocketbaseRecordsSyncOrderingComposer({
-    required super.$db,
-    required super.$table,
-    super.joinBuilder,
-    super.$addJoinBuilderToRootComposer,
-    super.$removeJoinBuilderFromRootComposer,
-  });
-  ColumnOrderings<String> get recordId => $composableBuilder(
-      column: $table.recordId, builder: (column) => ColumnOrderings(column));
-
-  ColumnOrderings<String> get collectionId => $composableBuilder(
-      column: $table.collectionId,
-      builder: (column) => ColumnOrderings(column));
-
-  ColumnOrderings<String> get collectionName => $composableBuilder(
-      column: $table.collectionName,
-      builder: (column) => ColumnOrderings(column));
-
-  ColumnOrderings<DateTime> get syncedAt => $composableBuilder(
-      column: $table.syncedAt, builder: (column) => ColumnOrderings(column));
-}
-
-class $PocketbaseRecordsSyncAnnotationComposer
-    extends Composer<_$CrdtDatabase, PocketbaseRecordsSync> {
-  $PocketbaseRecordsSyncAnnotationComposer({
-    required super.$db,
-    required super.$table,
-    super.joinBuilder,
-    super.$addJoinBuilderToRootComposer,
-    super.$removeJoinBuilderFromRootComposer,
-  });
-  GeneratedColumn<String> get recordId =>
-      $composableBuilder(column: $table.recordId, builder: (column) => column);
-
-  GeneratedColumn<String> get collectionId => $composableBuilder(
-      column: $table.collectionId, builder: (column) => column);
-
-  GeneratedColumn<String> get collectionName => $composableBuilder(
-      column: $table.collectionName, builder: (column) => column);
-
-  GeneratedColumn<DateTime> get syncedAt =>
-      $composableBuilder(column: $table.syncedAt, builder: (column) => column);
-}
-
-class $PocketbaseRecordsSyncTableManager extends RootTableManager<
-    _$CrdtDatabase,
-    PocketbaseRecordsSync,
-    PocketbaseRecordsSyncData,
-    $PocketbaseRecordsSyncFilterComposer,
-    $PocketbaseRecordsSyncOrderingComposer,
-    $PocketbaseRecordsSyncAnnotationComposer,
-    $PocketbaseRecordsSyncCreateCompanionBuilder,
-    $PocketbaseRecordsSyncUpdateCompanionBuilder,
-    (
-      PocketbaseRecordsSyncData,
-      BaseReferences<_$CrdtDatabase, PocketbaseRecordsSync,
-          PocketbaseRecordsSyncData>
-    ),
-    PocketbaseRecordsSyncData,
-    PrefetchHooks Function()> {
-  $PocketbaseRecordsSyncTableManager(
-      _$CrdtDatabase db, PocketbaseRecordsSync table)
-      : super(TableManagerState(
-          db: db,
-          table: table,
-          createFilteringComposer: () =>
-              $PocketbaseRecordsSyncFilterComposer($db: db, $table: table),
-          createOrderingComposer: () =>
-              $PocketbaseRecordsSyncOrderingComposer($db: db, $table: table),
-          createComputedFieldComposer: () =>
-              $PocketbaseRecordsSyncAnnotationComposer($db: db, $table: table),
-          updateCompanionCallback: ({
-            Value<String> recordId = const Value.absent(),
-            Value<String> collectionId = const Value.absent(),
-            Value<String> collectionName = const Value.absent(),
-            Value<DateTime> syncedAt = const Value.absent(),
-            Value<int> rowid = const Value.absent(),
-          }) =>
-              PocketbaseRecordsSyncCompanion(
-            recordId: recordId,
-            collectionId: collectionId,
-            collectionName: collectionName,
-            syncedAt: syncedAt,
-            rowid: rowid,
-          ),
-          createCompanionCallback: ({
-            required String recordId,
-            required String collectionId,
-            required String collectionName,
-            required DateTime syncedAt,
-            Value<int> rowid = const Value.absent(),
-          }) =>
-              PocketbaseRecordsSyncCompanion.insert(
-            recordId: recordId,
-            collectionId: collectionId,
-            collectionName: collectionName,
-            syncedAt: syncedAt,
-            rowid: rowid,
-          ),
-          withReferenceMapper: (p0) => p0
-              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
-              .toList(),
-          prefetchHooksCallback: null,
-        ));
-}
-
-typedef $PocketbaseRecordsSyncProcessedTableManager = ProcessedTableManager<
-    _$CrdtDatabase,
-    PocketbaseRecordsSync,
-    PocketbaseRecordsSyncData,
-    $PocketbaseRecordsSyncFilterComposer,
-    $PocketbaseRecordsSyncOrderingComposer,
-    $PocketbaseRecordsSyncAnnotationComposer,
-    $PocketbaseRecordsSyncCreateCompanionBuilder,
-    $PocketbaseRecordsSyncUpdateCompanionBuilder,
-    (
-      PocketbaseRecordsSyncData,
-      BaseReferences<_$CrdtDatabase, PocketbaseRecordsSync,
-          PocketbaseRecordsSyncData>
-    ),
-    PocketbaseRecordsSyncData,
     PrefetchHooks Function()>;
 typedef $KvStoreCreateCompanionBuilder = KvStoreCompanion Function({
   Value<String?> key,
@@ -1644,7 +1222,32 @@ class $CrdtDatabaseManager {
   $CrdtDatabaseManager(this._db);
   $PocketbaseRecordsTableManager get pocketbaseRecords =>
       $PocketbaseRecordsTableManager(_db, _db.pocketbaseRecords);
-  $PocketbaseRecordsSyncTableManager get pocketbaseRecordsSync =>
-      $PocketbaseRecordsSyncTableManager(_db, _db.pocketbaseRecordsSync);
   $KvStoreTableManager get kvStore => $KvStoreTableManager(_db, _db.kvStore);
+}
+
+class GetLastModifiedResult {
+  final PocketbaseRecord pocketbaseRecords;
+  final Hlc? modified;
+  GetLastModifiedResult({
+    required this.pocketbaseRecords,
+    this.modified,
+  });
+}
+
+class GetLastModifiedOnlyNodeIdResult {
+  final PocketbaseRecord pocketbaseRecords;
+  final Hlc? modified;
+  GetLastModifiedOnlyNodeIdResult({
+    required this.pocketbaseRecords,
+    this.modified,
+  });
+}
+
+class GetLastModifiedExceptNodeIdResult {
+  final PocketbaseRecord pocketbaseRecords;
+  final Hlc? modified;
+  GetLastModifiedExceptNodeIdResult({
+    required this.pocketbaseRecords,
+    this.modified,
+  });
 }
