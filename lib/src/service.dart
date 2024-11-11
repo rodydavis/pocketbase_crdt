@@ -118,7 +118,10 @@ class CrdtRecordService extends RecordService {
     );
   }
 
-  Future<void> sync({String? filters}) async {
+  Future<void> sync({
+    String? localFilters,
+    String? remoteFilters,
+  }) async {
     if (_syncing == true) {
       print('already syncing $collectionIdOrName');
       return;
@@ -140,7 +143,13 @@ class CrdtRecordService extends RecordService {
       });
       final changes = await localCrdt.getChangeset(
         modifiedAfter: lastHlc,
-        onlyNodeId: localCrdt.nodeId,
+        // onlyNodeId: localCrdt.nodeId,
+        onlyTables: [collectionIdOrName],
+        filters: {
+          if (localFilters != null) ...{
+            collectionIdOrName: CustomExpression<bool>(localFilters),
+          },
+        },
       );
       await remoteCrdt.merge(
         changes,
@@ -166,8 +175,9 @@ class CrdtRecordService extends RecordService {
           .getItem(lastUpdatedKey)
           .getSingleOrNull();
       var remoteChanges = await remoteCrdt.getChangeset(
+        onlyTables: [collectionIdOrName],
         extraFilters: {
-          if (filters != null) filters,
+          if (remoteFilters != null) remoteFilters,
           if (lastUpdated != null)
             "updated >= '${DateTime.parse(lastUpdated).dateOnly}'",
         },

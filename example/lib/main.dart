@@ -154,7 +154,11 @@ class _TodosScreenState extends State<TodosScreen> with SignalsMixin {
             onPressed: () async {
               try {
                 loading$.value = true;
-                await col.sync(filters: "user = '${widget.userId}'");
+                await col.sync(
+                  remoteFilters: "user = '${widget.userId}'",
+                  localFilters:
+                      "json_extract(data, '\$.user') = '${widget.userId}'",
+                );
               } catch (e) {
                 debugPrint('error syncing: $e');
               } finally {

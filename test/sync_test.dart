@@ -860,7 +860,10 @@ void main() {
         expect(current.first.data['name'], 'Task 1');
 
         // Sync
-        await col.sync(filters: "user = '$userId'");
+        await col.sync(
+          remoteFilters: "user = '$userId'",
+          localFilters: "json_extract(data, '\$.user') = '$userId'",
+        );
 
         final remote = await col //
             .getFullList();
@@ -903,7 +906,10 @@ void main() {
         expect(current.length, 0);
 
         // Sync
-        await col.sync(filters: "user = '$userId'");
+        await col.sync(
+          remoteFilters: "user = '$userId'",
+          localFilters: "json_extract(data, '\$.user') = '$userId'",
+        );
 
         current = await col //
             .getAll()
@@ -937,7 +943,10 @@ void main() {
         expect(current.length, 1);
 
         // Sync
-        await col.sync(filters: "user = '$userId'");
+        await col.sync(
+          remoteFilters: "user = '$userId'",
+          localFilters: "json_extract(data, '\$.user') = '$userId'",
+        );
 
         final remote = await col //
             .getFullList();
