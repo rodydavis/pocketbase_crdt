@@ -183,37 +183,55 @@ class PocketBaseCrdt with Crdt {
         record.data['hlc'] = record.data['hlc'].toString();
         record.data['modified'] = hlc.toString();
 
-        final col = client.collection(record.collectionId);
-        try {
-          final existing = await col.getList(filter: "id = '${record.id}'");
-          final data = record.toJson();
-          data.remove('created');
-          data.remove('updated');
-          data.remove('collectionId');
-          data.remove('collectionName');
-          data.remove('expand');
-          if (existing.items.isEmpty) {
-            await col.create(body: data);
-          } else {
-            data.remove('id');
-            final current = existing.items.first;
-            // Check hlc for conflict
-            final newHlc = _parseHlc(data);
-            final existingHlc = _parseHlc(current.data);
-            if (newHlc != null && existingHlc != null) {
-              if (newHlc.compareTo(existingHlc) < 0) {
-                print('skipping record: $record');
-                continue;
-              }
-            }
-            await col.update(record.id, body: data);
-          }
-          await onSuccess?.call(record);
-        } catch (e, t) {
-          print('error merging: $e');
-          await onError?.call(record, e, t);
-        }
+        await save(
+          record,
+          onError: onError,
+          onSuccess: onSuccess,
+        );
       }
+    }
+  }
+
+  Future<void> save(
+    RecordModel record, {
+    Future<void> Function(
+      RecordModel record,
+      Object? error,
+      StackTrace? stackTrace,
+    )? onError,
+    Future<void> Function(
+      RecordModel record,
+    )? onSuccess,
+  }) async {
+    final col = client.collection(record.collectionId);
+    try {
+      final existing = await col.getList(filter: "id = '${record.id}'");
+      final data = record.toJson();
+      data.remove('created');
+      data.remove('updated');
+      data.remove('collectionId');
+      data.remove('collectionName');
+      data.remove('expand');
+      if (existing.items.isEmpty) {
+        await col.create(body: data);
+      } else {
+        data.remove('id');
+        final current = existing.items.first;
+        // Check hlc for conflict
+        final newHlc = _parseHlc(data);
+        final existingHlc = _parseHlc(current.data);
+        if (newHlc != null && existingHlc != null) {
+          if (newHlc.compareTo(existingHlc) < 0) {
+            print('skipping record: $record');
+            return;
+          }
+        }
+        await col.update(record.id, body: data);
+      }
+      await onSuccess?.call(record);
+    } catch (e, t) {
+      print('error merging: $e');
+      await onError?.call(record, e, t);
     }
   }
 }

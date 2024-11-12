@@ -98,7 +98,10 @@ class CrdtDatabase extends _$CrdtDatabase with Crdt {
   // }
 
   @override
-  Future<void> merge(CrdtChangeset changeset) async {
+  Future<void> merge(
+    CrdtChangeset changeset, {
+    DateTime? syncedAt,
+  }) async {
     if (changeset.recordCount == 0) return;
 
     await transaction(() async {
@@ -128,7 +131,7 @@ class CrdtDatabase extends _$CrdtDatabase with Crdt {
           // Ensure hlc and modified are strings
           record['hlc'] = record['hlc'].toString();
           record['modified'] = hlc.toString();
-          await _insertRecord(jsonEncode(record));
+          await _insertRecord(jsonEncode(record), syncedAt);
         }
       }
     });
@@ -143,6 +146,8 @@ class CrdtDatabase extends _$CrdtDatabase with Crdt {
     Hlc? modifiedOn,
     Hlc? modifiedAfter,
     bool includeFailed = true,
+    bool includeNotSynced = true,
+    DateTime? syncedAfter,
   }) async {
     assert(onlyNodeId == null || exceptNodeId == null);
     assert(modifiedOn == null || modifiedAfter == null);
@@ -160,25 +165,29 @@ class CrdtDatabase extends _$CrdtDatabase with Crdt {
     final Map<String, List<PocketbaseRecord>> changeset = {};
     for (final table in onlyTables) {
       var q = select(pocketbaseRecords);
-      q = q
-        ..where((tbl) =>
-            tbl.collectionName.equals(table) | tbl.collectionId.equals(table));
+      // q = q
+      //   ..where((tbl) =>
+      //       tbl.collectionName.equals(table) | tbl.collectionId.equals(table));
+      final tblExp = pocketbaseRecords.collectionName.equals(table) |
+          pocketbaseRecords.collectionId.equals(table);
+      Expression<bool> exp = tblExp;
+
       if (filters != null && filters.containsKey(table)) {
         final filter = filters[table]!;
-        q = q..where((_) => filter);
+        exp = exp & filter;
       }
-      // if (updatedOn != null || updatedAfter != null) {
-      //   q = q
-      //     ..where((tbl) {
-      //       if (updatedOn != null) {
-      //         return tbl.updated.equals(updatedOn);
-      //       }
-      //       if (updatedAfter != null) {
-      //         return tbl.updated.isBiggerThanValue(updatedAfter);
-      //       }
-      //       throw AssertionError('unreachable');
-      //     });
-      // }
+      if (syncedAfter != null) {
+        exp = exp & pocketbaseRecords.syncedAt.isBiggerThanValue(syncedAfter);
+      }
+      if (includeFailed) {
+        exp =
+            exp | (tblExp & pocketbaseRecords.failedCount.isBiggerThanValue(0));
+      }
+      if (includeNotSynced) {
+        exp = exp | (tblExp & pocketbaseRecords.syncedAt.isNull());
+      }
+      q = q..where((tbl) => exp);
+      // print(q.constructQuery().buffer.toString());
       changeset[table] = await q.get();
     }
 
@@ -203,18 +212,6 @@ class CrdtDatabase extends _$CrdtDatabase with Crdt {
             .toList(),
       ),
     );
-
-    if (includeFailed) {
-      final errors = await getFailedRecords().get();
-      if (errors.isNotEmpty) {
-        for (final error in errors) {
-          // Skip max?
-          final table = error.collectionName;
-          final record = jsonDecode(error.data) as Map<String, Object?>;
-          changeSetData.putIfAbsent(table, () => []).add(record);
-        }
-      }
-    }
 
     return changeSetData;
   }
@@ -269,6 +266,7 @@ class CrdtDatabase extends _$CrdtDatabase with Crdt {
     bool isDeleted = false,
     bool notify = true,
     bool addId = true,
+    DateTime? syncedAt,
   }) async {
     await transaction(() async {
       DateTime? deletedAt = isDeleted ? DateTime.now() : null;
@@ -283,7 +281,7 @@ class CrdtDatabase extends _$CrdtDatabase with Crdt {
         data['node_id'] = hlc.nodeId;
         data['modified'] = hlc.toString();
         data['deleted_at'] = deletedAt?.toIso8601String();
-        await _insertRecord(jsonEncode(data));
+        await _insertRecord(jsonEncode(data), syncedAt);
       }
       final tables = records.map((e) => e.collectionId).toSet();
       if (notify) onDatasetChanged(tables, hlc);
@@ -295,12 +293,14 @@ class CrdtDatabase extends _$CrdtDatabase with Crdt {
     bool isDeleted = false,
     bool notify = true,
     bool addId = true,
+    DateTime? syncedAt,
   }) async {
     await setAll(
       [record],
       isDeleted: isDeleted,
       notify: notify,
       addId: addId,
+      syncedAt: syncedAt,
     );
   }
 

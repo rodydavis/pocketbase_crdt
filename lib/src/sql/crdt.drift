@@ -12,7 +12,8 @@ CREATE TABLE pocketbase_records (
   modified TEXT GENERATED ALWAYS AS (json_extract(data, '$.modified')) VIRTUAL NOT NULL MAPPED BY `const HlcConverter()`,
   deleted_at TEXT GENERATED ALWAYS AS (json_extract(data, '$.deleted_at')) VIRTUAL,
   failed_count INTEGER DEFAULT 0,
-  -- synced_at DATETIME,
+  synced_at DATETIME,
+  -- needs_sync BOOLEAN DEFAULT 0,
   UNIQUE(id, collectionId, collectionName)
 );
 
@@ -129,7 +130,8 @@ _insertRecord:
 INSERT INTO pocketbase_records (data)
 VALUES (:data)
 ON CONFLICT (id, collectionId, collectionName) DO
-UPDATE SET data = :data
+UPDATE SET data = :data,
+synced_at = :synced_at
 WHERE compareHlc(excluded.hlc, pocketbase_records.hlc) > 0;
 -- WHERE excluded.hlc > pocketbase_records.hlc;
 
@@ -140,7 +142,25 @@ AND (collectionName = :collection OR collectionId = :collection);
 
 getFailedRecords:
 SELECT * FROM pocketbase_records
-WHERE failed_count > 0;
+WHERE failed_count > 0
+AND (collectionName = :collection OR collectionId = :collection);
+
+getUnsyncedRecords:
+SELECT * FROM pocketbase_records
+WHERE (synced_at IS NULL OR synced_at = '')
+AND (collectionName = :collection OR collectionId = :collection);
+
+getSyncedAfter:
+SELECT * FROM pocketbase_records
+WHERE synced_at > :synced_at
+AND (collectionName = :collection OR collectionId = :collection);
+
+setRecordSynced:
+UPDATE pocketbase_records
+SET synced_at = :synced_at,
+failed_count = 0
+WHERE id = :id
+AND (collectionName = :collection OR collectionId = :collection);
 
 resetRecordError:
 UPDATE pocketbase_records

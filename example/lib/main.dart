@@ -7,7 +7,7 @@ import 'package:signals/signals_flutter.dart';
 final instance = CrdtPocketBase(
   'http://127.0.0.1:8090',
   createDatabaseExecutor(
-    'example4.db',
+    'example5.db',
     logStatements: true,
   ),
 );
@@ -142,6 +142,27 @@ class _TodosScreenState extends State<TodosScreen> with SignalsMixin {
 
   final collectionId = '2gufa3r1rbqvc36';
   final collectionName = 'todos';
+
+  Future<void> Function()? _unsubscribe;
+
+  @override
+  void initState() {
+    super.initState();
+    col
+        .syncRealtime(
+      remoteFilters: "user = '${widget.userId}'",
+      localFilters: "json_extract(data, '\$.user') = '${widget.userId}'",
+    )
+        .then((unsubscribe) {
+      _unsubscribe = unsubscribe;
+    });
+  }
+
+  @override
+  void dispose() {
+    _unsubscribe?.call();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
