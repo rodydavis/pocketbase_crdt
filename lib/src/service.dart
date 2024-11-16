@@ -127,6 +127,7 @@ class CrdtRecordService extends RecordService {
   Future<void> sync({
     String? localFilters,
     String? remoteFilters,
+    bool full = false,
   }) async {
     if (_syncing == true) {
       print('already syncing $collectionIdOrName');
@@ -158,8 +159,8 @@ class CrdtRecordService extends RecordService {
         return null;
       });
       final changes = await localCrdt.getChangeset(
-        modifiedAfter: lastHlc,
-        syncedAfter: lastSyncedAt,
+        modifiedAfter: full ? null : lastHlc,
+        syncedAfter: full ? null : lastSyncedAt,
         // onlyNodeId: localCrdt.nodeId,
         onlyTables: [collectionIdOrName],
         filters: {
@@ -204,7 +205,7 @@ class CrdtRecordService extends RecordService {
         onlyTables: [collectionIdOrName],
         extraFilters: {
           if (remoteFilters != null) remoteFilters,
-          if (lastUpdated != null)
+          if (!full && lastUpdated != null)
             "updated >= '${DateTime.parse(lastUpdated).dateOnly}'",
         },
         exceptNodeId: localCrdt.nodeId,
@@ -240,6 +241,7 @@ class CrdtRecordService extends RecordService {
     final remoteDispose = await subscribe(
       '*',
       (e) async {
+        print((e.action, e.record?.id));
         final r = e.record;
         if (r == null) return;
         switch (e.action) {

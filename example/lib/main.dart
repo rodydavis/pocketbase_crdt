@@ -2,18 +2,34 @@ import 'package:flutter/material.dart';
 import 'package:pocketbase/pocketbase.dart';
 import 'package:pocketbase_crdt/pocketbase_crdt.dart';
 import 'package:pocketbase_crdt/connection.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:signals/signals_flutter.dart';
+import 'package:fetch_client/fetch_client.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 
-final instance = CrdtPocketBase(
-  'http://127.0.0.1:8090',
-  createDatabaseExecutor(
-    'example5.db',
-    logStatements: true,
-  ),
-);
+late final CrdtPocketBase instance;
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  final e = createDatabaseExecutor(
+    'example5.db',
+    logStatements: true,
+    isWeb: kIsWeb,
+  );
+  final prefs = await SharedPreferences.getInstance();
+  const authKey = 'auth';
+  final store = AsyncAuthStore(
+    initial: prefs.getString(authKey),
+    save: (value) async => await prefs.setString(authKey, value),
+    clear: () async => await prefs.remove(authKey),
+  );
+  instance = CrdtPocketBase(
+    httpClientFactory:
+        kIsWeb ? () => FetchClient(mode: RequestMode.cors) : null,
+    'http://127.0.0.1:8090',
+    e,
+    authStore: store,
+  );
   await instance.init();
   runApp(const App());
 }
@@ -145,13 +161,24 @@ class _TodosScreenState extends State<TodosScreen> with SignalsMixin {
 
   Future<void> Function()? _unsubscribe;
 
+  late final remoteFilters = "user = '${widget.userId}'";
+  late final localFilters =
+      "json_extract(data, '\$.user') = '${widget.userId}'";
+
   @override
   void initState() {
     super.initState();
+
+    col
+        .sync(
+          remoteFilters: remoteFilters,
+          localFilters: localFilters,
+        )
+        .ignore();
     col
         .syncRealtime(
-      remoteFilters: "user = '${widget.userId}'",
-      localFilters: "json_extract(data, '\$.user') = '${widget.userId}'",
+      remoteFilters: remoteFilters,
+      localFilters: localFilters,
     )
         .then((unsubscribe) {
       _unsubscribe = unsubscribe;
@@ -176,9 +203,8 @@ class _TodosScreenState extends State<TodosScreen> with SignalsMixin {
               try {
                 loading$.value = true;
                 await col.sync(
-                  remoteFilters: "user = '${widget.userId}'",
-                  localFilters:
-                      "json_extract(data, '\$.user') = '${widget.userId}'",
+                  remoteFilters: remoteFilters,
+                  localFilters: localFilters,
                 );
               } catch (e) {
                 debugPrint('error syncing: $e');
@@ -245,6 +271,15 @@ class _TodosScreenState extends State<TodosScreen> with SignalsMixin {
                       return ListTile(
                         title: Text(name.isNotEmpty ? name : 'Untitled'),
                         // subtitle: Text(jsonEncode(item.toJson())),
+                        trailing: IconButton(
+                          icon: const Icon(Icons.delete),
+                          onPressed: () async {
+                            await col.set(
+                              item.toJson(),
+                              isDeleted: true,
+                            );
+                          },
+                        ),
                       );
                     },
                   );
