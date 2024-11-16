@@ -290,6 +290,7 @@ class CrdtRecordService extends RecordService {
               record.id,
               collectionIdOrName,
             );
+            // TODO: infinite error loop
           },
           onSuccess: (record) async {
             // print('sync - record success: ${record.id}');
