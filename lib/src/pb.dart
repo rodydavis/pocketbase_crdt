@@ -3,9 +3,10 @@ import 'dart:async';
 import 'package:crdt/crdt.dart';
 import 'package:pocketbase/pocketbase.dart';
 
+import 'utils/crdt.dart';
 import 'utils/id.dart';
 
-class PocketBaseCrdt with Crdt {
+class PocketBaseCrdt with Crdt, CrdtMixin {
   PocketBaseCrdt(this.client, this.collections);
 
   final PocketBase client;
@@ -138,7 +139,7 @@ class PocketBaseCrdt with Crdt {
 
     return {
       for (final entry in changeset.entries)
-        entry.key: entry.value.map((e) => e.toJson()).toList(),
+        entry.key: entry.value.map((e) => fixHlc(e.toJson())).toList(),
     };
   }
 
@@ -206,7 +207,7 @@ class PocketBaseCrdt with Crdt {
     final col = client.collection(record.collectionId);
     try {
       final existing = await col.getList(filter: "id = '${record.id}'");
-      final data = record.toJson();
+      final data = fixHlc(record.toJson());
       data.remove('created');
       data.remove('updated');
       data.remove('collectionId');

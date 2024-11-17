@@ -5,13 +5,14 @@ import 'package:crdt/crdt.dart';
 import 'package:drift/drift.dart';
 import 'package:pocketbase/pocketbase.dart' show RecordModel;
 
+import 'utils/crdt.dart';
 import 'utils/hlc.dart';
 import 'utils/id.dart';
 
 part 'database.g.dart';
 
 @DriftDatabase(include: {"sql/crdt.drift"})
-class CrdtDatabase extends _$CrdtDatabase with Crdt {
+class CrdtDatabase extends _$CrdtDatabase with Crdt, CrdtMixin {
   CrdtDatabase(super.e);
 
   @override
