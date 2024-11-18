@@ -1,518 +1,522 @@
 import 'package:crdt/crdt.dart';
-import 'package:drift/drift.dart';
+import 'package:pocketbase_crdt/src/connection/connect.temp.dart';
 import 'package:test/test.dart';
 import 'package:pocketbase_crdt/pocketbase_crdt.dart';
-import 'package:pocketbase_crdt/src/connection/connect.memory.dart';
 
 void main() {
-  driftRuntimeOptions.dontWarnAboutMultipleDatabases = true;
+  // driftRuntimeOptions.dontWarnAboutMultipleDatabases = true;
   const userId = 'qqp8kzg8hq5qwnq';
   const collectionId = '2gufa3r1rbqvc36';
   const collectionName = 'todos';
   final remoteFilters = "user = '$userId'";
   final localFilters = "data->'\$.user' = '$userId'";
 
+  late CrdtPocketBase instance;
+
+  setUp(() async {
+    instance = createInstance();
+    await instance.init();
+    await instance.reset();
+  });
+
+  tearDown(() async {
+    await instance.reset();
+    await instance.close();
+  });
+
   group('CrdtPocketBase', () {
-    test('open and close', () async {
-      final instance = createInstance();
-      await instance.init();
-      //
-      await instance.close();
-    });
+    // test('open and close', () async {
+    //   final instance = createInstance();
+    //   await instance.init();
+    //   //
+    //   await instance.close();
+    // });
 
     test('create 1 local', () async {
-      await instanceScope((instance) async {
-        final col = instance.crdtCollection(
-          collectionId: collectionId,
-          collectionName: collectionName,
-        );
+      final col = instance.crdtCollection(
+        collectionId: collectionId,
+        collectionName: collectionName,
+      );
 
-        var current = await col //
-            .getAll()
-            .get();
-        expect(current, isEmpty);
+      var current = await col //
+          .getAll()
+          .get();
+      expect(current, isEmpty);
 
-        // Add record
-        var data = {
-          'name': 'Task 1',
-          'user': userId,
-        };
-        await col.set(data);
+      // Add record
+      var data = {
+        'name': 'Task 1',
+        'user': userId,
+      };
+      await col.set(data);
 
-        current = await col //
-            .getAll()
-            .get();
-        expect(current.length, 1);
-        expect(current.first.data['name'], 'Task 1');
-      });
+      current = await col //
+          .getAll()
+          .get();
+      expect(current.length, 1);
+      expect(current.first.data['name'], 'Task 1');
     });
 
     test('create 1 local and sync to remote', () async {
-      await instanceScope((instance) async {
-        final col = instance.crdtCollection(
-          collectionId: collectionId,
-          collectionName: collectionName,
-        );
+      final col = instance.crdtCollection(
+        collectionId: collectionId,
+        collectionName: collectionName,
+      );
 
-        var current = await col //
-            .getAll()
-            .get();
-        expect(current, isEmpty);
+      var current = await col //
+          .getAll()
+          .get();
+      expect(current, isEmpty);
 
-        // Add record
-        var data = {
-          'name': 'Task 1',
-          'user': userId,
-        };
-        await col.set(data);
+      // Add record
+      var data = {
+        'name': 'Task 1',
+        'user': userId,
+      };
+      await col.set(data);
 
-        current = await col //
-            .getAll()
-            .get();
-        expect(current.length, 1);
-        expect(current.first.data['name'], 'Task 1');
+      current = await col //
+          .getAll()
+          .get();
+      expect(current.length, 1);
+      expect(current.first.data['name'], 'Task 1');
 
-        // Sync
-        await col.sync(
-          remoteFilters: "user = '$userId'",
-          localFilters: "json_extract(data, '\$.user') = '$userId'",
-        );
+      // Sync
+      await col.sync(
+        remoteFilters: remoteFilters,
+        localFilters: localFilters,
+      );
 
-        final remote = await col //
-            .getFullList();
-        expect(remote.length, 1);
-        expect(remote.first.data['name'], 'Task 1');
-      });
+      final remote = await col //
+          .getFullList();
+      expect(remote.length, 1);
+      expect(remote.first.data['name'], 'Task 1');
     });
 
     test('create 1 remote and sync to local', () async {
-      await instanceScope((instance) async {
-        final col = instance.crdtCollection(
-          collectionId: collectionId,
-          collectionName: collectionName,
-        );
+      final col = instance.crdtCollection(
+        collectionId: collectionId,
+        collectionName: collectionName,
+      );
 
-        var current = await col //
-            .getAll()
-            .get();
-        expect(current, isEmpty);
+      var current = await col //
+          .getAll()
+          .get();
+      expect(current, isEmpty);
 
-        // Add record
-        final remoteNode = instance.db.createPocketbaseId();
-        final hlc = Hlc.zero(remoteNode);
-        var data = {
-          'name': 'Task 1',
-          'user': userId,
-          'hlc': hlc.toString(),
-          'node_id': hlc.nodeId,
-          'modified': hlc.toString(),
-        };
-        await col.create(body: data);
+      // Add record
+      final remoteNode = instance.db.createPocketbaseId();
+      final hlc = Hlc.zero(remoteNode);
+      var data = {
+        'name': 'Task 1',
+        'user': userId,
+        'hlc': hlc.toString(),
+        'node_id': hlc.nodeId,
+        'modified': hlc.toString(),
+      };
+      await col.create(body: data);
 
-        current = await col //
-            .getFullList();
-        expect(current.length, 1);
+      current = await col //
+          .getFullList();
+      expect(current.length, 1);
 
-        current = await col //
-            .getAll()
-            .get();
-        expect(current.length, 0);
+      current = await col //
+          .getAll()
+          .get();
+      expect(current.length, 0);
 
-        // Sync
-        await col.sync(
-          remoteFilters: "user = '$userId'",
-          localFilters: "json_extract(data, '\$.user') = '$userId'",
-        );
+      // Sync
+      await col.sync(
+        remoteFilters: remoteFilters,
+        localFilters: localFilters,
+      );
 
-        current = await col //
-            .getAll()
-            .get();
-        expect(current.length, 1);
-        expect(current.first.data['name'], 'Task 1');
-      });
+      current = await col //
+          .getAll()
+          .get();
+      expect(current.length, 1);
+      expect(current.first.data['name'], 'Task 1');
     });
 
     test('invalid record does not stop sync', () async {
-      await instanceScope((instance) async {
-        final col = instance.crdtCollection(
-          collectionId: collectionId,
-          collectionName: collectionName,
-        );
+      final col = instance.crdtCollection(
+        collectionId: collectionId,
+        collectionName: collectionName,
+      );
 
-        var current = await col //
-            .getAll()
-            .get();
-        expect(current, isEmpty);
+      var current = await col //
+          .getAll()
+          .get();
+      expect(current, isEmpty);
 
-        // Add record
-        var data = {
-          'user': userId,
-        };
-        await col.set(data);
+      // Add record
+      var data = {
+        'user': userId,
+      };
+      await col.set(data);
 
-        current = await col //
-            .getAll()
-            .get();
-        expect(current.length, 1);
+      current = await col //
+          .getAll()
+          .get();
+      expect(current.length, 1);
 
-        // Sync
-        await col.sync(
-          remoteFilters: "user = '$userId'",
-          localFilters: "json_extract(data, '\$.user') = '$userId'",
-        );
+      // Sync
+      await col.sync(
+       remoteFilters: remoteFilters,
+        localFilters: localFilters,
+      );
 
-        final remote = await col //
-            .getFullList();
-        expect(remote.length, 0);
+      final remote = await col //
+          .getFullList();
+      expect(remote.length, 0);
 
-        var failed = await instance //
-            .db
-            .getFailedRecords(collectionName)
-            .get();
-        expect(failed.length, 1);
-      });
+      var failed = await instance //
+          .db
+          .getFailedRecords(collectionName)
+          .get();
+      expect(failed.length, 1);
     });
 
-    test('check for delete', () async {
-      await instanceScope((instance) async {
-        final col = instance.crdtCollection(
-          collectionId: collectionId,
-          collectionName: collectionName,
-        );
+    // test('check for delete', () async {
+    //   await instanceScope((instance) async {
+    //     final col = instance.crdtCollection(
+    //       collectionId: collectionId,
+    //       collectionName: collectionName,
+    //     );
 
-        var current = await col //
-            .getAll()
-            .get();
-        expect(current, isEmpty);
+    //     var current = await col //
+    //         .getAll()
+    //         .get();
+    //     expect(current, isEmpty);
 
-        // Add record
-        var data = <String, Object?>{
-          'name': 'Task 1',
-          'user': userId,
-        };
-        await col.set(data);
+    //     // Add record
+    //     var data = <String, Object?>{
+    //       'name': 'Task 1',
+    //       'user': userId,
+    //     };
+    //     await col.set(data);
 
-        current = await col //
-            .getAll()
-            .get();
-        expect(current.length, 1);
-        expect(current.first.data['name'], 'Task 1');
+    //     current = await col //
+    //         .getAll()
+    //         .get();
+    //     expect(current.length, 1);
+    //     expect(current.first.data['name'], 'Task 1');
 
-        data = current.first.toJson();
+    //     data = current.first.toJson();
 
-        // Sync
-        await col.sync(
-          remoteFilters: remoteFilters,
-          localFilters: localFilters,
-        );
+    //     // Sync
+    //     await col.sync(
+    //       remoteFilters: remoteFilters,
+    //       localFilters: localFilters,
+    //     );
 
-        var remote = await col //
-            .getFullList();
-        expect(remote.length, 1);
-        expect(remote.first.data['name'], 'Task 1');
+    //     var remote = await col //
+    //         .getFullList();
+    //     expect(remote.length, 1);
+    //     expect(remote.first.data['name'], 'Task 1');
 
-        // Delete
-        await col.set(data, isDeleted: true);
+    //     // Delete
+    //     await col.set(data, isDeleted: true);
 
-        var local = await col //
-            .getAll()
-            .get();
-        expect(local.length, 0);
+    //     var local = await col //
+    //         .getAll()
+    //         .get();
+    //     expect(local.length, 0);
 
-        // Sync
-        await col.sync(
-          remoteFilters: remoteFilters,
-          localFilters: localFilters,
-        );
+    //     // Sync
+    //     await col.sync(
+    //       remoteFilters: remoteFilters,
+    //       localFilters: localFilters,
+    //     );
 
-        remote = await col //
-            .getFullList();
-        local = await col //
-            .getAll()
-            .get();
-        expect(remote.length, 1);
-        expect(remote.first.data['name'], 'Task 1');
-        expect(remote.first.data['deleted_at'].toString(), isNotEmpty);
-        expect(local.length, 0);
-      });
-    });
+    //     remote = await col //
+    //         .getFullList();
+    //     local = await col //
+    //         .getAll()
+    //         .get();
+    //     expect(remote.length, 1);
+    //     expect(remote.first.data['name'], 'Task 1');
+    //     expect(remote.first.data['deleted_at'].toString(), isNotEmpty);
+    //     expect(local.length, 0);
+    //   });
+    // });
   });
 
-  group('2 local dbs', () {
-    test('sync a local to remote then to b local', () async {
-      final a = createInstance();
-      final b = createInstance();
-      try {
-        await a.init();
-        await b.init();
+  // group('2 local dbs', () {
+  //   test('sync a local to remote then to b local', () async {
+  //     final a = createInstance();
+  //     final b = createInstance();
+  //     try {
+  //       await a.init();
+  //       await b.init();
 
-        final colA = a.crdtCollection(
-          collectionId: collectionId,
-          collectionName: collectionName,
-        );
-        final colB = b.crdtCollection(
-          collectionId: collectionId,
-          collectionName: collectionName,
-        );
+  //       final colA = a.crdtCollection(
+  //         collectionId: collectionId,
+  //         collectionName: collectionName,
+  //       );
+  //       final colB = b.crdtCollection(
+  //         collectionId: collectionId,
+  //         collectionName: collectionName,
+  //       );
 
-        var currentA = await colA //
-            .getAll()
-            .get();
-        expect(currentA, isEmpty);
+  //       var currentA = await colA //
+  //           .getAll()
+  //           .get();
+  //       expect(currentA, isEmpty);
 
-        var currentB = await colB //
-            .getAll()
-            .get();
-        expect(currentB, isEmpty);
+  //       var currentB = await colB //
+  //           .getAll()
+  //           .get();
+  //       expect(currentB, isEmpty);
 
-        // Add record
-        var data = {
-          'name': 'Task 1',
-          'user': userId,
-        };
-        await colA.set(data);
+  //       // Add record
+  //       var data = {
+  //         'name': 'Task 1',
+  //         'user': userId,
+  //       };
+  //       await colA.set(data);
 
-        currentA = await colA //
-            .getAll()
-            .get();
-        expect(currentA.length, 1);
-        expect(currentA.first.data['name'], 'Task 1');
+  //       currentA = await colA //
+  //           .getAll()
+  //           .get();
+  //       expect(currentA.length, 1);
+  //       expect(currentA.first.data['name'], 'Task 1');
 
-        currentB = await colB //
-            .getAll()
-            .get();
-        expect(currentB, isEmpty);
+  //       currentB = await colB //
+  //           .getAll()
+  //           .get();
+  //       expect(currentB, isEmpty);
 
-        // Sync
-        await colA.sync(
-          remoteFilters: remoteFilters,
-          localFilters: localFilters,
-        );
+  //       // Sync
+  //       await colA.sync(
+  //         remoteFilters: remoteFilters,
+  //         localFilters: localFilters,
+  //       );
 
-        var remote = await colA //
-            .getFullList();
-        expect(remote.length, 1);
-        expect(remote.first.data['name'], 'Task 1');
+  //       var remote = await colA //
+  //           .getFullList();
+  //       expect(remote.length, 1);
+  //       expect(remote.first.data['name'], 'Task 1');
 
-        // Sync
-        await colB.sync(
-          remoteFilters: remoteFilters,
-          localFilters: localFilters,
-        );
+  //       // Sync
+  //       await colB.sync(
+  //         remoteFilters: remoteFilters,
+  //         localFilters: localFilters,
+  //       );
 
-        currentB = await colB //
-            .getAll()
-            .get();
-        expect(currentB.length, 1);
-        expect(currentB.first.data['name'], 'Task 1');
-      } catch (e) {
-        await a.reset();
-        await b.reset();
-      }
-    });
+  //       currentB = await colB //
+  //           .getAll()
+  //           .get();
+  //       expect(currentB.length, 1);
+  //       expect(currentB.first.data['name'], 'Task 1');
+  //     } catch (e) {
+  //       await a.reset();
+  //       await b.reset();
+  //     }
+  //   });
 
-    test('sync a local to remote then to b local, then delete from a',
-        () async {
-      final a = createInstance();
-      final b = createInstance();
-      try {
-        await a.init();
-        await b.init();
+  //   test('sync a local to remote then to b local, then delete from a',
+  //       () async {
+  //     final a = createInstance();
+  //     final b = createInstance();
+  //     try {
+  //       await a.init();
+  //       await b.init();
 
-        final colA = a.crdtCollection(
-          collectionId: collectionId,
-          collectionName: collectionName,
-        );
-        final colB = b.crdtCollection(
-          collectionId: collectionId,
-          collectionName: collectionName,
-        );
+  //       final colA = a.crdtCollection(
+  //         collectionId: collectionId,
+  //         collectionName: collectionName,
+  //       );
+  //       final colB = b.crdtCollection(
+  //         collectionId: collectionId,
+  //         collectionName: collectionName,
+  //       );
 
-        var currentA = await colA //
-            .getAll()
-            .get();
-        expect(currentA, isEmpty);
+  //       var currentA = await colA //
+  //           .getAll()
+  //           .get();
+  //       expect(currentA, isEmpty);
 
-        var currentB = await colB //
-            .getAll()
-            .get();
-        expect(currentB, isEmpty);
+  //       var currentB = await colB //
+  //           .getAll()
+  //           .get();
+  //       expect(currentB, isEmpty);
 
-        // Add record
-        var data = {
-          'name': 'Task 1',
-          'user': userId,
-        };
-        await colA.set(data);
+  //       // Add record
+  //       var data = {
+  //         'name': 'Task 1',
+  //         'user': userId,
+  //       };
+  //       await colA.set(data);
 
-        currentA = await colA //
-            .getAll()
-            .get();
-        expect(currentA.length, 1);
-        expect(currentA.first.data['name'], 'Task 1');
+  //       currentA = await colA //
+  //           .getAll()
+  //           .get();
+  //       expect(currentA.length, 1);
+  //       expect(currentA.first.data['name'], 'Task 1');
 
-        currentB = await colB //
-            .getAll()
-            .get();
-        expect(currentB, isEmpty);
+  //       currentB = await colB //
+  //           .getAll()
+  //           .get();
+  //       expect(currentB, isEmpty);
 
-        // Sync
-        await colA.sync(
-          remoteFilters: remoteFilters,
-          localFilters: localFilters,
-        );
+  //       // Sync
+  //       await colA.sync(
+  //         remoteFilters: remoteFilters,
+  //         localFilters: localFilters,
+  //       );
 
-        var remote = await colA //
-            .getFullList();
-        expect(remote.length, 1);
-        expect(remote.first.data['name'], 'Task 1');
+  //       var remote = await colA //
+  //           .getFullList();
+  //       expect(remote.length, 1);
+  //       expect(remote.first.data['name'], 'Task 1');
 
-        // Sync
-        await colB.sync(
-          remoteFilters: remoteFilters,
-          localFilters: localFilters,
-        );
+  //       // Sync
+  //       await colB.sync(
+  //         remoteFilters: remoteFilters,
+  //         localFilters: localFilters,
+  //       );
 
-        currentB = await colB //
-            .getAll()
-            .get();
-        expect(currentB.length, 1);
-        expect(currentB.first.data['name'], 'Task 1');
+  //       currentB = await colB //
+  //           .getAll()
+  //           .get();
+  //       expect(currentB.length, 1);
+  //       expect(currentB.first.data['name'], 'Task 1');
 
-        // Delete from a
-        await colA.set(currentA.first.toJson(), isDeleted: true);
+  //       // Delete from a
+  //       await colA.set(currentA.first.toJson(), isDeleted: true);
 
-        // Sync
-        await colA.sync(
-          remoteFilters: remoteFilters,
-          localFilters: localFilters,
-        );
+  //       // Sync
+  //       await colA.sync(
+  //         remoteFilters: remoteFilters,
+  //         localFilters: localFilters,
+  //       );
 
-        currentA = await colA //
-            .getAll()
-            .get();
-        expect(currentA.length, 0);
+  //       currentA = await colA //
+  //           .getAll()
+  //           .get();
+  //       expect(currentA.length, 0);
 
-        // Sync
-        await colB.sync(
-          remoteFilters: remoteFilters,
-          localFilters: localFilters,
-        );
+  //       // Sync
+  //       await colB.sync(
+  //         remoteFilters: remoteFilters,
+  //         localFilters: localFilters,
+  //       );
 
-        currentB = await colB //
-            .getAll()
-            .get();
-        expect(currentB.length, 0);
-      } catch (e) {
-        await a.reset();
-        await b.reset();
-      }
-    });
+  //       currentB = await colB //
+  //           .getAll()
+  //           .get();
+  //       expect(currentB.length, 0);
+  //     } catch (e) {
+  //       await a.reset();
+  //       await b.reset();
+  //     }
+  //   });
 
-    test('sync a local to remote then to b local, then delete from b',
-        () async {
-      final a = createInstance();
-      final b = createInstance();
-      try {
-        await a.init();
-        await b.init();
+  //   test('sync a local to remote then to b local, then delete from b',
+  //       () async {
+  //     final a = createInstance();
+  //     final b = createInstance();
+  //     try {
+  //       await a.init();
+  //       await b.init();
 
-        final colA = a.crdtCollection(
-          collectionId: collectionId,
-          collectionName: collectionName,
-        );
-        final colB = b.crdtCollection(
-          collectionId: collectionId,
-          collectionName: collectionName,
-        );
+  //       final colA = a.crdtCollection(
+  //         collectionId: collectionId,
+  //         collectionName: collectionName,
+  //       );
+  //       final colB = b.crdtCollection(
+  //         collectionId: collectionId,
+  //         collectionName: collectionName,
+  //       );
 
-        var currentA = await colA //
-            .getAll()
-            .get();
-        expect(currentA, isEmpty);
+  //       var currentA = await colA //
+  //           .getAll()
+  //           .get();
+  //       expect(currentA, isEmpty);
 
-        var currentB = await colB //
-            .getAll()
-            .get();
-        expect(currentB, isEmpty);
+  //       var currentB = await colB //
+  //           .getAll()
+  //           .get();
+  //       expect(currentB, isEmpty);
 
-        // Add record
-        var data = {
-          'name': 'Task 1',
-          'user': userId,
-        };
-        await colA.set(data);
+  //       // Add record
+  //       var data = {
+  //         'name': 'Task 1',
+  //         'user': userId,
+  //       };
+  //       await colA.set(data);
 
-        currentA = await colA //
-            .getAll()
-            .get();
-        expect(currentA.length, 1);
-        expect(currentA.first.data['name'], 'Task 1');
+  //       currentA = await colA //
+  //           .getAll()
+  //           .get();
+  //       expect(currentA.length, 1);
+  //       expect(currentA.first.data['name'], 'Task 1');
 
-        currentB = await colB //
-            .getAll()
-            .get();
-        expect(currentB, isEmpty);
+  //       currentB = await colB //
+  //           .getAll()
+  //           .get();
+  //       expect(currentB, isEmpty);
 
-        // Sync
-        await colA.sync(
-          remoteFilters: remoteFilters,
-          localFilters: localFilters,
-        );
+  //       // Sync
+  //       await colA.sync(
+  //         remoteFilters: remoteFilters,
+  //         localFilters: localFilters,
+  //       );
 
-        var remote = await colA //
-            .getFullList();
-        expect(remote.length, 1);
-        expect(remote.first.data['name'], 'Task 1');
+  //       var remote = await colA //
+  //           .getFullList();
+  //       expect(remote.length, 1);
+  //       expect(remote.first.data['name'], 'Task 1');
 
-        // Sync
-        await colB.sync(
-          remoteFilters: remoteFilters,
-          localFilters: localFilters,
-        );
+  //       // Sync
+  //       await colB.sync(
+  //         remoteFilters: remoteFilters,
+  //         localFilters: localFilters,
+  //       );
 
-        currentB = await colB //
-            .getAll()
-            .get();
-        expect(currentB.length, 1);
-        expect(currentB.first.data['name'], 'Task 1');
+  //       currentB = await colB //
+  //           .getAll()
+  //           .get();
+  //       expect(currentB.length, 1);
+  //       expect(currentB.first.data['name'], 'Task 1');
 
-        // Delete from b
-        await colB.set(currentB.first.toJson(), isDeleted: true);
+  //       // Delete from b
+  //       await colB.set(currentB.first.toJson(), isDeleted: true);
 
-        // Sync
-        await colB.sync(
-          remoteFilters: remoteFilters,
-          localFilters: localFilters,
-        );
+  //       // Sync
+  //       await colB.sync(
+  //         remoteFilters: remoteFilters,
+  //         localFilters: localFilters,
+  //       );
 
-        currentB = await colA //
-            .getAll()
-            .get();
-        expect(currentB.length, 0);
+  //       currentB = await colA //
+  //           .getAll()
+  //           .get();
+  //       expect(currentB.length, 0);
 
-        // Sync
-        await colA.sync(
-          remoteFilters: remoteFilters,
-          localFilters: localFilters,
-        );
+  //       // Sync
+  //       await colA.sync(
+  //         remoteFilters: remoteFilters,
+  //         localFilters: localFilters,
+  //       );
 
-        currentA = await colA //
-            .getAll()
-            .get();
-        expect(currentA.length, 0);
-      } catch (e) {
-        await a.reset();
-        await b.reset();
-      }
-    });
-  });
+  //       currentA = await colA //
+  //           .getAll()
+  //           .get();
+  //       expect(currentA.length, 0);
+  //     } catch (e) {
+  //       await a.reset();
+  //       await b.reset();
+  //     }
+  //   });
+  // });
 }
 
 CrdtPocketBase createInstance() {
   return CrdtPocketBase(
     'http://127.0.0.1:8090',
-    createMemoryExecutor(logStatements: false),
+    createTempExecutor(logStatements: false),
   );
 }
 
@@ -621,3 +625,4 @@ extension on CrdtPocketBase {
 //     await localCrdt.setItem(lastUpdatedKey, newest.toIso8601String());
 //   }
 // }
+

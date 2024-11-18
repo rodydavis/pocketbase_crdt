@@ -12,7 +12,7 @@ late final CrdtPocketBase instance;
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   final e = createDatabaseExecutor(
-    'example5.db',
+    'example8.db',
     logStatements: true,
     isWeb: kIsWeb,
   );

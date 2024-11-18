@@ -208,7 +208,7 @@ class CrdtRecordService extends RecordService {
           if (!full && lastUpdated != null)
             "updated >= '${DateTime.parse(lastUpdated).dateOnly}'",
         },
-        exceptNodeId: localCrdt.nodeId,
+        exceptNodeId: full ? null : localCrdt.nodeId,
       );
       await localCrdt.merge(
         remoteChanges,
