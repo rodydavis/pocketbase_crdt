@@ -139,7 +139,9 @@ class PocketBaseCrdt with Crdt, CrdtMixin {
 
     return {
       for (final entry in changeset.entries)
-        entry.key: entry.value.map((e) => fixHlc(e.toJson())).toList(),
+        entry.key: entry.value.map((e) {
+          return repairHlc(e.toJson(), now: false);
+        }).toList(),
     };
   }
 
@@ -207,7 +209,7 @@ class PocketBaseCrdt with Crdt, CrdtMixin {
     final col = client.collection(record.collectionId);
     try {
       final existing = await col.getList(filter: "id = '${record.id}'");
-      final data = fixHlc(record.toJson());
+      final data = repairHlc(record.toJson());
       data.remove('created');
       data.remove('updated');
       data.remove('collectionId');

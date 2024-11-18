@@ -15,3 +15,9 @@ class HlcConverter extends TypeConverter<Hlc, String>
     return value.toString();
   }
 }
+
+Hlc hlcFromJson(Object obj) {
+  if (obj is Hlc) return obj;
+  if (obj is String) return Hlc.parse(obj);
+  throw ArgumentError.value(obj, 'obj', 'Expected Hlc or String');
+}
