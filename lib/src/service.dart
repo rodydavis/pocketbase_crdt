@@ -8,16 +8,11 @@ import 'package:pocketbase/pocketbase.dart';
 import 'database.dart';
 import 'pb.dart';
 
-class CrdtPocketBase extends PocketBase {
-  CrdtPocketBase(
-    super.baseUrl,
-    QueryExecutor e, {
-    super.lang,
-    super.authStore,
-    super.httpClientFactory,
-  }) : db = CrdtDatabase(e);
+class CrdtPocketBase {
+  CrdtPocketBase(this.pb, QueryExecutor e) : db = CrdtDatabase(e);
 
   final CrdtDatabase db;
+  final PocketBase pb;
 
   Future<void> init() async {
     await db.init();
@@ -38,7 +33,7 @@ class CrdtPocketBase extends PocketBase {
     return CrdtRecordService(
       collectionId: collectionId,
       collectionName: collectionName,
-      client: this,
+      client: pb,
       db: db,
     );
   }
@@ -50,13 +45,13 @@ class CrdtRecordService extends RecordService {
     required this.collectionName,
     required PocketBase client,
     required this.db,
-  }) : super(client, collectionId.isEmpty ? collectionName : collectionId);
+  }) : super(client, collectionName);
   final String collectionId;
   final String collectionName;
 
   String get collectionIdOrName {
-    assert(collectionId.isNotEmpty || collectionName.isNotEmpty);
-    return collectionId.isNotEmpty ? collectionId : collectionName;
+    // assert(collectionId.isNotEmpty || collectionName.isNotEmpty);
+    return collectionName;
   }
 
   final CrdtDatabase db;
@@ -135,7 +130,9 @@ class CrdtRecordService extends RecordService {
     }
     try {
       _syncing = true;
+
       await crdt.init();
+
       final localCrdt = db;
       final remoteCrdt = crdt;
       final lastHlcKey = '$collectionIdOrName:local-last-hlc';
@@ -148,7 +145,9 @@ class CrdtRecordService extends RecordService {
         }
         return null;
       });
+
       final lastSyncedAtKey = '$collectionIdOrName:local-last-synced-at';
+
       final lastSyncedAt = await localCrdt //
           .getItem(lastSyncedAtKey)
           .getSingleOrNull()
@@ -158,6 +157,7 @@ class CrdtRecordService extends RecordService {
         }
         return null;
       });
+
       final changes = await localCrdt.getChangeset(
         modifiedAfter: full ? null : lastHlc,
         syncedAfter: full ? null : lastSyncedAt,
@@ -172,15 +172,17 @@ class CrdtRecordService extends RecordService {
 
       await remoteCrdt.merge(
         changes,
-        onError: (record, err, trace) async {
-          print('sync - record error: ${record.id}, $err, $trace');
+        onError: (record, err, trace, code) async {
+          if (code == 400) {
+            await _delete(record);
+            return;
+          }
           await localCrdt.incrementRecordError(
             record.id,
             collectionIdOrName,
           );
         },
         onSuccess: (record) async {
-          // print('sync - record success: ${record.id}');
           await localCrdt.setRecordSynced(
             DateTime.now(),
             record.id,
@@ -188,6 +190,7 @@ class CrdtRecordService extends RecordService {
           );
         },
       );
+
       await localCrdt.setItem(
         lastHlcKey,
         lastHlc?.toString(),
@@ -196,11 +199,11 @@ class CrdtRecordService extends RecordService {
         lastSyncedAtKey,
         DateTime.now().toIso8601String(),
       );
-
       final lastUpdatedKey = '$collectionIdOrName:remote-last-updated';
       final lastUpdated = await localCrdt //
           .getItem(lastUpdatedKey)
           .getSingleOrNull();
+
       var remoteChanges = await remoteCrdt.getChangeset(
         onlyTables: [collectionIdOrName],
         extraFilters: {
@@ -284,8 +287,12 @@ class CrdtRecordService extends RecordService {
       for (final item in event) {
         await crdt.save(
           RecordModel.fromJson(jsonDecode(item.data)),
-          onError: (record, err, trace) async {
+          onError: (record, err, trace, code) async {
             print('sync - record error: ${record.id}, $err, $trace');
+            if (code == 400) {
+              await _delete(record);
+              return;
+            }
             await db.incrementRecordError(
               record.id,
               collectionIdOrName,
@@ -308,6 +315,15 @@ class CrdtRecordService extends RecordService {
     return () async {
       await Future.wait(cleanup.map((e) => e()));
     };
+  }
+
+  Future<void> _delete(RecordModel record) async {
+    await db.managers.pocketbaseRecords
+        .filter((f) =>
+            f.id.equals(record.id) &
+            (f.collectionId.equals(record.collectionId) |
+                f.collectionName.equals(record.collectionName)))
+        .delete();
   }
 }
 

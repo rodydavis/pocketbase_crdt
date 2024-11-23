@@ -113,8 +113,17 @@ class CrdtDatabase extends _$CrdtDatabase with Crdt, CrdtMixin {
       for (final entry in changeset.entries) {
         final records = entry.value;
         for (final record in records) {
-          record['hlc'] = Hlc.parse(record['hlc'] as String);
-          record['modified'] = Hlc.parse(record['modified'] as String);
+          if (record['hlc'] == null || record['hlc'] == '') {
+            record['hlc'] = Hlc.zero(nodeId).toString();
+          }
+          if (record['modified'] == null || record['modified'] == '') {
+            record['modified'] = Hlc.zero(nodeId).toString();
+          }
+          if (record['node_id'] == null || record['node_id'] == '') {
+            record['node_id'] = nodeId;
+          }
+          record['hlc'] = _getHlc(record['hlc']);
+          record['modified'] = _getHlc(record['modified']);
         }
       }
 
@@ -373,3 +382,10 @@ class CrdtDatabase extends _$CrdtDatabase with Crdt, CrdtMixin {
 //     };
 //   }
 // }
+
+Hlc _getHlc(Object? val) {
+  if (val == null) return Hlc.zero(createId());
+  if (val is Hlc) return val;
+  if (val is String) return Hlc.parse(val);
+  throw Exception('Unknown hlc type');
+}

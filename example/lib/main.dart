@@ -24,11 +24,13 @@ void main() async {
     clear: () async => await prefs.remove(authKey),
   );
   instance = CrdtPocketBase(
-    httpClientFactory:
-        kIsWeb ? () => FetchClient(mode: RequestMode.cors) : null,
-    'http://127.0.0.1:8090',
+    PocketBase(
+      httpClientFactory:
+          kIsWeb ? () => FetchClient(mode: RequestMode.cors) : null,
+      'http://127.0.0.1:8090',
+      authStore: store,
+    ),
     e,
-    authStore: store,
   );
   await instance.init();
   runApp(const App());
@@ -59,14 +61,14 @@ class Home extends StatefulWidget {
 
 class _HomeState extends State<Home> with SignalsMixin {
   late final auth$ =
-      this.bindSignal(instance.authStore.onChange.toStreamSignal());
+      this.bindSignal(instance.pb.authStore.onChange.toStreamSignal());
   late final loggedIn$ = this.createComputed(() {
     auth$.value;
-    return instance.authStore.isValid;
+    return instance.pb.authStore.isValid;
   });
   late final authModel$ = this.createComputed(() {
     auth$.value;
-    return instance.authStore.model;
+    return instance.pb.authStore.model;
   });
 
   @override
@@ -112,7 +114,7 @@ class _LoginScreenState extends State<LoginScreen> with SignalsMixin {
           ),
           ElevatedButton(
             onPressed: () async {
-              await instance
+              await instance.pb
                   .collection('users')
                   .authWithPassword(username.text, password.text)
                   .then((user) {
@@ -240,7 +242,7 @@ class _TodosScreenState extends State<TodosScreen> with SignalsMixin {
           IconButton(
             icon: const Icon(Icons.logout),
             onPressed: () {
-              instance.authStore.clear();
+              instance.pb.authStore.clear();
             },
           ),
         ],

@@ -126,6 +126,17 @@ class PocketBaseCrdt with Crdt, CrdtMixin {
 
     // Apply remaining filters
     for (final records in changeset.values) {
+      for (final record in records) {
+        if (record.data['hlc'] == null || record.data['hlc'] == '') {
+          record.data['hlc'] = Hlc.zero(nodeId);
+        }
+        if (record.data['modified'] == null || record.data['modified'] == '') {
+          record.data['modified'] = Hlc.zero(nodeId);
+        }
+        if (record.data['node_id'] == null || record.data['node_id'] == '') {
+          record.data['node_id'] = nodeId;
+        }
+      }
       records.removeWhere((value) {
         return (onlyNodeId != null && value.hlc.nodeId != onlyNodeId) ||
             (exceptNodeId != null && value.hlc.nodeId == exceptNodeId) ||
@@ -152,6 +163,7 @@ class PocketBaseCrdt with Crdt, CrdtMixin {
       RecordModel record,
       Object? error,
       StackTrace? stackTrace,
+      int statusCode,
     )? onError,
     Future<void> Function(
       RecordModel record,
@@ -201,6 +213,7 @@ class PocketBaseCrdt with Crdt, CrdtMixin {
       RecordModel record,
       Object? error,
       StackTrace? stackTrace,
+      int statusCode,
     )? onError,
     Future<void> Function(
       RecordModel record,
@@ -234,7 +247,11 @@ class PocketBaseCrdt with Crdt, CrdtMixin {
       await onSuccess?.call(record);
     } catch (e, t) {
       print('error merging: $e');
-      await onError?.call(record, e, t);
+      int statusCode = 500;
+      if (e is ClientException) {
+        statusCode = e.statusCode;
+      }
+      await onError?.call(record, e, t, statusCode);
     }
   }
 }
@@ -254,6 +271,7 @@ Hlc? _parseHlc(Map<String, dynamic> data) {
 }
 
 extension on RecordModel {
-  Hlc get hlc => _parseHlc(data)!;
-  Hlc get modified => _parseHlc(data)!;
+  static final randomNodeId = createId();
+  Hlc get hlc => _parseHlc(data) ?? Hlc.zero(randomNodeId);
+  Hlc get modified => _parseHlc(data) ?? Hlc.zero(randomNodeId);
 }
