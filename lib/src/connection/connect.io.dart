@@ -2,13 +2,18 @@ import 'dart:io';
 
 // import 'package:path/path.dart' as p;
 import 'package:drift/drift.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:drift/native.dart';
 import 'package:sqlite3/common.dart';
 import 'package:sqlite3/sqlite3.dart';
 
 Future<File> getDatabaseFile(String name) async {
-  return File(name);
-  // final appDir = await getApplicationSupportDirectory();
+  final appDir = await getApplicationSupportDirectory();
+  final file = File('${appDir.path}/$name');
+  if (name.contains('/')) {
+    await file.parent.create(recursive: true);
+  }
+  return file;
   // return File(p.join(appDir.path, name));
 }
 
