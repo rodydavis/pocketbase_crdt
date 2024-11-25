@@ -65,8 +65,6 @@ class CrdtRecordService extends RecordService {
     await crdt.init();
   }
 
-  bool _syncing = false;
-
   Selectable<RecordModel> getAll() {
     return db.getAll(collectionIdOrName);
   }
@@ -124,13 +122,7 @@ class CrdtRecordService extends RecordService {
     String? remoteFilters,
     bool full = false,
   }) async {
-    if (_syncing == true) {
-      print('already syncing $collectionIdOrName');
-      return;
-    }
     try {
-      _syncing = true;
-
       await crdt.init();
 
       final localCrdt = db;
@@ -230,8 +222,6 @@ class CrdtRecordService extends RecordService {
       }
     } catch (e, t) {
       print('error syncing $collectionIdOrName: $e, $t');
-    } finally {
-      _syncing = false;
     }
   }
 

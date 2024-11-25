@@ -242,7 +242,22 @@ class PocketBaseCrdt with Crdt, CrdtMixin {
             return;
           }
         }
-        await col.update(record.id, body: data);
+        try {
+          await col.update(record.id, body: data);
+        } catch (e) {
+          if (e is ClientException) {
+            if (e.statusCode == 404) {
+              await col.create(
+                body: {
+                  ...data,
+                  'id': record.id,
+                },
+              );
+            } else {
+              rethrow;
+            }
+          }
+        }
       }
       await onSuccess?.call(record);
     } catch (e, t) {
