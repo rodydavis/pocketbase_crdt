@@ -199,6 +199,7 @@ class CrdtRecordService extends RecordService {
       var remoteChanges = await remoteCrdt.getChangeset(
         onlyTables: [collectionIdOrName],
         extraFilters: {
+          "node_id != '${localCrdt.nodeId}'",
           if (remoteFilters != null) remoteFilters,
           if (!full && lastUpdated != null)
             "updated >= '${DateTime.parse(lastUpdated).dateOnly}'",
