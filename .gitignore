@@ -53,7 +53,7 @@ assets/xlsx/
 ai/
 node_modules/
 
-db/
+# db/
 pocketbase
 pb_data/
 pb_migrations/
